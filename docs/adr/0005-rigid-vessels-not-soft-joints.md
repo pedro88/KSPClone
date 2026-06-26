@@ -1,0 +1,5 @@
+# Rigid vessels, not soft joints
+
+A vessel is a rigid body (split only at decouplers/stages), with flex permitted only at deliberate articulation points — robotic hinges/rotors and docking ports. We rejected KSP's per-part soft-joint model (the noodle-rocket wobble) and its structural-failure-as-soft-body behaviour.
+
+In KSP, per-part soft joints drive a large share of physics cost, the "kraken" instability, and the size of a vessel's state. All three scale with part count, and all three are far worse here than in KSP because the server runs K physics bubbles concurrently and must replicate vessel state to clients. Rigid vessels make replication a single transform + velocity per vessel instead of per part, keep the server cheap, and remove a whole class of instability. The cost is losing wobble "charm" and continuous structural flex; structural failure instead becomes a discrete event (decoupler fires, joint breaks past a load threshold). Intentional articulation (docking, robotics) is preserved.

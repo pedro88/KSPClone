@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/piet/.claude/skills/grill-with-docs/**)",
+      "Read(//home/piet/.agents/skills/grill-with-docs/**)",
+      "Read(//home/piet/.claude/skills/domain-modeling/**)",
+      "Read(//home/piet/.agents/skills/domain-modeling/**)"
+    ]
+  }
+}

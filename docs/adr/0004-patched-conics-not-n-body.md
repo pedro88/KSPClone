@@ -1,0 +1,5 @@
+# Patched conics, not n-body
+
+Orbits use the patched-conics model (KSP1-style): a vessel is under exactly one body's gravity at a time (its current SOI), every orbit is an analytic conic, and transitions are patched at SOI boundaries. We rejected full n-body gravity despite its realism (Lagrange points, perturbations).
+
+The reason is load-bearing for the rest of the architecture: on-rails vessels must be propagated to an *arbitrary* future game-time both cheaply and exactly — the empty-server living universe, the warp auto-limit to the next POI, and serializing vessel state for persistence all depend on a closed-form `position(t)`. Patched conics gives exactly that. N-body has no closed form: it forces numerical integration across the entire warp interval, which is expensive, accumulates drift over long warps, and destroys the "evaluate the orbit at t + 1 week instantly" property the design relies on. A perturbation layer could be added later if ever wanted, but the core stays patched conics.
