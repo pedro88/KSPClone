@@ -9,7 +9,7 @@ The single in-universe clock all players and vessels share. Always advances — 
 _Avoid_: sim time, world time
 
 **Master clock**:
-The authoritative source of game-time, owned by the dedicated server. There is exactly one.
+The authoritative source of game-time, owned by the dedicated server. There is exactly one. Implemented as `MasterClock` (SimCore), single `SimWorld` owns it, single writer is `SimWorld.Tick` (Constitution Art. 1). One escape hatch exists (`MasterClock.ClampTo`, called only by the warp auto-limit to land exactly on a POI).
 _Avoid_: host clock
 
 **Baseline rate**:
@@ -19,6 +19,15 @@ Game-time advances at 1:1 with real-time when no warp is active (including when 
 Player-initiated acceleration of game-time above baseline. Every warp of either kind requires a consensus vote — because the single master clock means any warp advances time for everyone. Two distinct kinds below.
 _Avoid_: time acceleration, fast-forward
 
+**Warp kind**:
+The category of warp requested. Two values: `Physics` (low multiplier, physics keeps stepping) and `OnRails` (high multiplier, analytic conic only). Multipliers in the unsupported gap between the two kinds are rejected outright — see ADR-0010.
+
+**Warp state**:
+The state of the warp FSM (Idle / Voting / Active). Idle is the default. A warp request transitions Idle → Voting; unanimity transitions Voting → Active; cancel / auto-limit / connection-driven halt transitions back to Idle.
+
+**Warp end reason**:
+The reason a warp was halted back to Idle: `Cancelled` (requester cancels the open vote), `AutoLimit` (clock reached the earliest global POI), `HaltedByConnection` (a player joined mid-warp — TIME-6).
+
 **Warp vote**:
 The consensus mechanism gating any warp. A player requests a warp; it begins only once **all** connected players approve (unanimous). A non-approval is "not yet," not a permanent veto. A player who disconnects mid-warp stops being a voter and warp continues; a player who connects during warp never consented, so warp halts to baseline and they join the next vote.
 
@@ -26,13 +35,13 @@ The consensus mechanism gating any warp. A player requests a warp; it begins onl
 Any upcoming event the warp must not skip: a maneuver node, a sphere-of-influence (SOI) transition, or an atmospheric-interface crossing. Computed across all vessels in the world.
 
 **Auto-limit**:
-Even after a warp vote passes, the server clamps the warp's actual end-time to the soonest POI across *all* vessels. The vote grants permission; the auto-limit guarantees no one silently skips their burn or transition.
+Even after a warp vote passes, the server clamps the warp's actual end-time to the soonest POI across *all* vessels. The vote grants permission; the auto-limit guarantees no one silently skips their burn or transition. Implemented as `WarpAutoLimit.Tick`; the only legitimate caller of `MasterClock.ClampTo`.
 
 **Physics warp**:
-Low-multiplier warp (≈x1–x4) where the physics simulation still runs each step. Used in atmosphere or near docking.
+Low-multiplier warp (≤ x4) where the physics simulation still runs each step. Used in atmosphere or near docking.
 
 **On-rails warp**:
-High-multiplier warp (x1000+) where vessels stop being physically simulated and follow analytic (Keplerian) orbits.
+High-multiplier warp (≥ x1000) where vessels stop being physically simulated and follow analytic (Keplerian) orbits.
 _Avoid_: time warp (ambiguous — say which kind)
 
 ## Orbital model
@@ -41,10 +50,22 @@ _Avoid_: time warp (ambiguous — say which kind)
 The orbital model: a vessel is under exactly one body's gravity at a time (its current SOI), so every orbit is an analytic conic. Transitions between bodies are "patched" at SOI boundaries. No n-body perturbations.
 
 **Sphere of influence (SOI)**:
-The region around a body within which that body is the sole gravitational influence on a vessel. Crossing an SOI boundary is a POI.
+The region around a body within which that body is the sole gravitational influence on a vessel. Crossing an SOI boundary is a POI. Per body, computed once from its orbit around its parent (Laplace form, KSP-style spherical approximation).
 
 **Orbit**:
-A vessel's analytic conic around its current SOI body. Because it is closed-form, position at any future game-time is solved directly (Kepler) — making on-rails propagation exact and effectively free, including jumping straight to an arbitrary future time.
+A vessel's analytic conic around its current SOI body. Stored as six classical Keplerian elements + epoch + parent body. Because it is closed-form, position at any future game-time is solved directly (Kepler) — making on-rails propagation exact and effectively free, including jumping straight to an arbitrary future time.
+
+**Kepler propagator**:
+The closed-form solver `KeplerPropagator.StateAt(orbit, gameTime, registry)` that turns (orbit, game-time) into (position, velocity) in the parent body's inertial frame in one evaluation — no time-stepping. M0 implements the elliptic path (M001 of René Schwarz); hyperbolic / parabolic orbits throw NotSupportedException and are deferred to the universal-variable formulation of [docs/references/orbital-mechanics.md](../docs/references/orbital-mechanics.md).
+
+**World-frame position**:
+The position of a body or vessel in the shared universe frame, accounting for the parent's own position (and velocity, once we add it). For an on-rails vessel it is `parent.WorldPositionOf(t) + KeplerPropagator.StateAt(orbit, t).position`. M0 drops the parent's velocity because the static body tree of T06 places every body at the origin; richer positioning will land when bodies actually orbit.
+
+**Parent-frame position**:
+The position of a vessel relative to its current SOI body's centre — what the Kepler propagator returns directly. Preferred for on-rails replication because it is cheaper than world-frame.
+
+**State vector**:
+A (position, velocity) pair in some frame. The Kepler propagator outputs a state vector in the parent frame; the StateVectorToOrbit inverse converts a state vector back to classical elements when re-parenting at an SOI crossing.
 
 ## Vessels & simulation
 
@@ -68,8 +89,20 @@ A deliberate place a vessel may flex or move: robotic hinges/rotors and docking 
 A discrete event (decoupler fires, joint breaks past a load threshold) rather than a continuous soft-body simulation.
 
 **Vessel clock**:
-Each vessel's own "as-of game-time" stamp. On-rails vessels stay synced to the master clock. An active-physics vessel that is left unattended (all players gone) is *suspended* — snapshotted, its vessel clock pauses, and it resumes from that snapshot when a player next loads it. Its vessel clock can therefore lag the master clock.
+Each vessel's own "as-of game-time" stamp (`Vessel.VesselClockSeconds`). On-rails vessels stay synced to the master clock (Constitution Art. 4). An active-physics vessel that is left unattended (all players gone) is *suspended* — snapshotted, its vessel clock pauses, and it resumes from that snapshot when a player next loads it. Its vessel clock can therefore lag the master clock.
 _Avoid_: vessel time
+
+**Vessel id**:
+The opaque server-assigned identifier of a vessel (`VesselId`). UUID, generated on construction. Stable across the vessel's lifetime; survives persistence (UUID primary key in the `vessel` table).
+
+**Player id**:
+The opaque server-assigned identifier of a connected player (`PlayerId`). UUID, generated on connect. Never reused within a session lifetime.
+
+**Tick**:
+One evaluation of the fixed-timestep accumulator. The server runs 60 ticks per second of real time (`SimScheduler.FixedDt = 1/60`). Decoupled from render frame rate (Constitution Art. 2).
+
+**Tick rate**:
+The measured number of ticks per real-time second. M0 target: 60 ±1, including under stalls.
 
 **Suspended vessel**:
 An active-physics vessel parked at a snapshot because no player is present to simulate it. Excluded from game-time advance until reloaded.
@@ -89,14 +122,38 @@ A vessel *promotes* from on-rails to active-physics when a player loads or appro
 **Authoritative state**:
 The server's canonical simulation state. The single source of truth for every vessel.
 
-**Client-side prediction**:
-The pilot's client simulates its *own* controlled vessel locally from inputs and renders immediately, so the stick has no perceived input lag. Applied only to the locally-controlled vessel.
+**Server bootstrap**:
+The MonoBehaviour (`ServerBootstrap` in the Server assembly) that constructs the authoritative `SimWorld` in `Awake()` and drives `SimScheduler.Advance(Time.unscaledDeltaTime)` from `Update()`. The single place the headless server loop is wired; everything else is engine-agnostic.
 
-**Reconciliation**:
-Correcting a client's predicted state toward authoritative server state when they diverge, smoothed to avoid visible snapping.
+**Connection registry**:
+The server's authoritative list of currently connected players (`ConnectionRegistry`). Add / Remove fire `PlayerConnected` / `PlayerDisconnected` events synchronously; the warp FSM and the membership sync subscribe to these to keep warp membership correct during play.
+
+**Player session**:
+The server-side record of one connected player (`PlayerSession`). In M0 it carries a server-assigned `PlayerId` and a `ConnectedAt` timestamp; transport-specific data (LiteNetLib peer, etc.) is held by the transport layer, not here — SimCore stays engine-agnostic.
+
+**World handshake**:
+The message the server sends to a client immediately on connect (`WorldHandshakeMessage`): the current `MasterClock.GameTimeSeconds` plus every vessel's orbital elements. Lets the client list the vessel and display game-time without waiting for the first snapshot.
+
+**Snapshot**:
+A periodic authoritative read of one vessel's state at a server-tick — `VesselSnapshot` carries `vesselId`, `gameTime`, `seq`, `position`, `velocity`. The server emits snapshots in bundles (`SnapshotBundle`) at 25 Hz by default (configurable 20–30 Hz), decoupled from the 60 Hz sim tick (NET-5 / ADR-0006).
+
+**Snapshot bundle**:
+The per-emission collection of vessel snapshots stamped with a single shared `gameTime` and `seq`. One bundle per emitter tick.
+
+**Snapshot buffer**:
+The per-vessel time-ordered sliding window the client keeps (`SnapshotBuffer`) for interpolation. Oldest dropped when capacity is reached.
 
 **Interpolation**:
-How a client displays everything it does *not* control (other vessels, other bubbles): replayed from authoritative snapshots with a small delay. No prediction.
+How a client displays everything it does *not* control (other vessels, other bubbles): replayed from authoritative snapshots with a small delay (default 100 ms ≈ 2.5× snapshot interval at 25 Hz). No prediction.
+
+**Client-side prediction**:
+The pilot's client simulates its *own* controlled vessel locally from inputs and renders immediately, so the stick has no perceived input lag. Applied only to the locally-controlled vessel. M1 territory.
+
+**Reconciliation**:
+Correcting a client's predicted state toward authoritative server state when they diverge, smoothed to avoid visible snapping. M1 territory.
+
+**Transport**:
+The wire layer (LiteNetLib or equivalent UDP library) that ships messages between client and server. Transport-specific code lives in the Server / Client assemblies, never in SimCore — the simulation must remain engine-agnostic and unit-testable.
 
 ## Construction
 
@@ -181,3 +238,20 @@ _Avoid_: mission control (use for the place), tower
 **Living universe**:
 The world's state evolves whenever game-time advances, regardless of whether anyone is online. Persistence means the universe has a fixed home (the dedicated server) and survives all disconnects — not merely that state is saved.
 _Avoid_: persistent world (ambiguous)
+
+## Persistence
+
+**World repository**:
+The single Postgres-backed write-through layer (`WorldRepository`, KSPClone.Persistence). M0 ships `UpsertProgram`, `UpsertClock`, `UpsertVessel`, `LoadClock`, `LoadVessels`, and `Migrate`. Holds no in-memory state — the in-memory `SimWorld` is the hot copy; the repository is the durable shadow.
+
+**Persistence event sink**:
+The thin orchestrator (`PersistenceEventSink`) that subscribes to the meaningful-event hooks of the SimCore (SOI transition, warp commit) and writes through to Postgres. Per docs/references/persistence-postgres.md §3, each event commits its coupled facts (clock + affected vessels) atomically.
+
+**World restorer**:
+The loader (`WorldRestorer.RestoreOrSeed`) called on server start: rebuilds the in-memory `SimWorld` from the persisted rows (clock + every vessel), or seeds a fresh world on an empty DB. Resume rate is always 1.0 (no warp-in-progress is ever persisted).
+
+**Write-through**:
+The persistence pattern this project uses: meaningful events write to Postgres in the same transaction as their in-memory effect, so the DB is always the commit point. Routine 1:1 baseline ticks are NOT written through — the 60 Hz loop stays in-memory. Clock checkpoints are written only on warp commit in M0; periodic checkpoints arrive in M1.
+
+**Empty-DB seed**:
+The bootstrap callback passed to `WorldRestorer.RestoreOrSeed` for the first run on a fresh database. The restorer runs the callback, then persists the seed so subsequent restarts find state.
