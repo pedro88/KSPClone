@@ -105,11 +105,11 @@ namespace KSPClone.SimCore
 
         public static double EccentricToTrueAnomaly(double eAnom, double eccentricity)
         {
-            var cosE = Math.Cos(eAnom);
-            var sinE = Math.Sin(eAnom);
+            // Half-angle form: ν = 2·atan2(√(1+e)·sin(E/2), √(1-e)·cos(E/2)).
+            var halfE = 0.5 * eAnom;
             var sqrt1pe = Math.Sqrt(1.0 + eccentricity);
             var sqrt1me = Math.Sqrt(1.0 - eccentricity);
-            return 2.0 * Math.Atan2(sqrt1pe * sinE, sqrt1me * cosE);
+            return 2.0 * Math.Atan2(sqrt1pe * Math.Sin(halfE), sqrt1me * Math.Cos(halfE));
         }
 
         public static double WrapTwoPi(double angle)
