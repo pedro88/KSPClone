@@ -73,6 +73,7 @@ These are not suggestions. If a change violates one, stop and flag it.
 - **Determinism hygiene:** the sim core is engine-agnostic C#, no `UnityEngine.Time` / no frame coupling / no wall-clock reads inside it. PhysX is non-deterministic and that's fine *because* the server is authoritative — don't try to make clients match bit-for-bit; reconcile instead.
 - **State authoritative position in doubles, simulate locally in floats.** Never store world position as float32.
 - **When unsure, ask or check the docs — don't invent.** Especially Unity APIs (version drift) and orbital formulas (verify against the reference doc).
+- **Commit at the end of every task.** When a ticket is implemented and its acceptance criteria are met, commit before moving on. One commit per task, message cites the ticket id (e.g. `M0-T01: stand up SimCore assembly + ServerBootstrap`). The commit is the proof the slice advanced.
 
 ## Maintain the model as you go (this is real work, not bookkeeping)
 
