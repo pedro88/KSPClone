@@ -28,16 +28,22 @@ namespace KSPClone.SimCore
 
         /// <summary>
         /// World-frame position of the body's centre at <paramref name="gameTime"/>.
-        /// Root body is fixed at the origin. With no parent-frame orbit, every
-        /// body sits at its parent's world position (i.e. the whole tree is
-        /// co-located at the origin in M0; richer positioning arrives in T07).
+        /// Root body is fixed at the origin. A child body without an
+        /// <see cref="CelestialBody.OrbitAroundParent"/> sits at its parent's
+        /// world position. A child with an orbit has it propagated via
+        /// <see cref="KeplerPropagator.WorldFrameStateAt"/> and added to the
+        /// parent's world position.
         /// </summary>
         public Vector3d WorldPositionOf(CelestialBodyId id, double gameTime)
         {
             var body = _bodies[id];
             if (body.ParentId is not CelestialBodyId parentId)
                 return Vector3d.Zero;
-            return WorldPositionOf(parentId, gameTime);
+            var parentPos = WorldPositionOf(parentId, gameTime);
+            if (body.OrbitAroundParent is null)
+                return parentPos;
+            var (relPos, _, _, _) = KeplerPropagator.WorldFrameStateAt(body.OrbitAroundParent, gameTime, this);
+            return parentPos + relPos;
         }
 
         /// <summary>
