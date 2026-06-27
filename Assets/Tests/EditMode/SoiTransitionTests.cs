@@ -12,7 +12,7 @@ namespace KSPClone.SimCore.Tests
         private static BodyRegistry EarthMoonSystem()
         {
             var earth = new CelestialBody(CelestialBodyId.Planet, "Earth", EarthMu, 924_000_000.0, CelestialBodyId.Root);
-            var moon = new CelestialBody(CelestialBodyId.Moon, MoonMu, 66_100_000.0, CelestialBodyId.Planet,
+            var moon = new CelestialBody(CelestialBodyId.Moon, "Moon", MoonMu, 66_100_000.0, CelestialBodyId.Planet,
                 new Orbit(384_400_000.0, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet));
             return new BodyRegistry(new[] { earth, moon });
         }

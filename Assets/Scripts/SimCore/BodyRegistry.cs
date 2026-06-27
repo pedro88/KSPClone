@@ -36,6 +36,9 @@ namespace KSPClone.SimCore
         /// </summary>
         public Vector3d WorldPositionOf(CelestialBodyId id, double gameTime)
         {
+            // Root is the implicit universe origin, never a stored body.
+            if (id == CelestialBodyId.Root)
+                return Vector3d.Zero;
             var body = _bodies[id];
             if (body.ParentId is not CelestialBodyId parentId)
                 return Vector3d.Zero;
@@ -55,7 +58,9 @@ namespace KSPClone.SimCore
             while (body.ParentId is CelestialBodyId pid)
             {
                 yield return pid;
-                body = _bodies[pid];
+                // Root (or any unstored ancestor) ends the chain.
+                if (!_bodies.TryGetValue(pid, out body!))
+                    yield break;
             }
         }
     }

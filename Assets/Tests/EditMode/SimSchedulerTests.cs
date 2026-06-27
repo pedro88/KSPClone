@@ -11,7 +11,9 @@ namespace KSPClone.SimCore.Tests
         {
             var (scheduler, tickRecorder) = MakeScheduler();
 
-            var chunks = new[] { 0.003, 0.05, 0.01, 0.2, 0.04, 0.07, 0.005, 0.5, 0.122 };
+            // All chunks kept <= MaxAdvanceSeconds so none trips the spiral-of-death
+            // clamp (that path is covered by Advance_LargeChunk...). Sum = 1.0s.
+            var chunks = new[] { 0.003, 0.05, 0.01, 0.2, 0.04, 0.07, 0.005, 0.25, 0.25, 0.122 };
             foreach (var c in chunks)
                 scheduler.Advance(c);
 
@@ -68,7 +70,8 @@ namespace KSPClone.SimCore.Tests
         [Test]
         public void Advance_MasterClock_AdvancesByOneSecondAfterSixtyTicks()
         {
-            var (scheduler, world) = MakeScheduler();
+            var world = new SimWorld();
+            var scheduler = new SimScheduler(world);
             for (int i = 0; i < 60; i++)
                 scheduler.Advance(SimScheduler.FixedDt);
 

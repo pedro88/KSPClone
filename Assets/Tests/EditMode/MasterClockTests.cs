@@ -58,7 +58,10 @@ namespace KSPClone.SimCore.Tests
         {
             var world = new SimWorld();
             var scheduler = new SimScheduler(world);
-            scheduler.Advance(1.0);
+            // Feed in frame-sized chunks: a single 1.0s chunk would hit the
+            // spiral-of-death clamp (MaxAdvanceSeconds), which is tested separately.
+            for (int i = 0; i < 60; i++)
+                scheduler.Advance(SimScheduler.FixedDt);
             Assert.AreEqual(1.0, world.Clock.GameTimeSeconds, SimScheduler.FixedDt,
                 "MasterClock must advance with zero vessels (Constitution Art. 4: the universe lives even when empty).");
         }
