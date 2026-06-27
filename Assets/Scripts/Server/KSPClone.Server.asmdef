@@ -1,0 +1,16 @@
+{
+    "name": "KSPClone.Server",
+    "rootNamespace": "KSPClone.Server",
+    "references": [
+        "KSPClone.SimCore"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
