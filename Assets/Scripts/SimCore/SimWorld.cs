@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace KSPClone.SimCore
@@ -6,6 +7,8 @@ namespace KSPClone.SimCore
     {
         public MasterClock Clock { get; }
         public IReadOnlyDictionary<VesselId, Vessel> Vessels => _vessels;
+
+        public event Action<double>? TickRecorded;
 
         private readonly Dictionary<VesselId, Vessel> _vessels;
 
@@ -23,6 +26,7 @@ namespace KSPClone.SimCore
         public void Tick(double dtSeconds)
         {
             Clock.Advance(dtSeconds);
+            TickRecorded?.Invoke(dtSeconds);
         }
     }
 }
