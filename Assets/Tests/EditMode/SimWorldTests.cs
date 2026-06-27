@@ -28,7 +28,8 @@ namespace KSPClone.SimCore.Tests
         [Test]
         public void SimWorld_RegisterVessel_PreservesOnRailsDefault()
         {
-            var vessel = new Vessel(VesselId.New());
+            var vessel = new Vessel(VesselId.New(),
+                new Orbit(7_000_000.0, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet));
             var world = new SimWorld();
 
             world.RegisterVessel(vessel);
