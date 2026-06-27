@@ -8,6 +8,21 @@ The execution breakdown under [spec.md](./spec.md).
 
 Ordering follows the constitution's "prove the spine first" (Art. 10): M0 is the skeleton; features layer on after. PROG (M5) may interleave once tech needs meaning.
 
+## Implementation status (live)
+
+Updated as milestones land. Detailed ticket status lives in [GitHub issues](https://github.com/pedro88/KSPClone/issues) (one issue per task).
+
+- **M0 — Skeleton (the spine):** 22/23 tickets landed. Only **T02** (Unity dedicated-server build target) remains — needs Editor. Wire transport (LiteNetLib) is deferred to a later slice that wires the already-defined wire-agnostic data structures (T12 partial / T13 / T14 / T15) to the actual UDP layer.
+- **M1 — Physics bubble + prediction:** not started.
+- **M2 — Multi-crew stations:** not started.
+- **M3 — Collaborative VAB:** not started.
+- **M4 — Comms & ground control:** not started.
+- **M5 — Progression (Science mode):** not started.
+
+P-1 (wire format) is **partially resolved**: pure full snapshots shipped, per-vessel seq and delta-against-acked-baseline land with the prediction loop in M1 Slice 1.3.
+
+Open decisions remaining (gating specific slices) are tracked at the bottom of this file.
+
 ---
 
 ## M0 — Skeleton (the spine)
@@ -18,27 +33,27 @@ Ordering follows the constitution's "prove the spine first" (Art. 10): M0 is the
 
 ### Slice 0.1 — Fixed-step headless server + master clock
 - [ ] T1 — Unity headless build target that runs with no renderer → server process starts under `-batchmode -nographics` and logs ticks (NET-1, Art.2)
-- [ ] T2 — Fixed 60 Hz scheduler decoupled from frame → tick interval stable under artificial render stalls (NET-5, Art.2)
-- [ ] T3 — Master clock advances 1:1 with real-time, single instance → 60 s real = 60 s game-time, ±1 tick (TIME-1, TIME-2)
+- [x] T2 — Fixed 60 Hz scheduler decoupled from frame → tick interval stable under artificial render stalls (NET-5, Art.2)
+- [x] T3 — Master clock advances 1:1 with real-time, single instance → 60 s real = 60 s game-time, ±1 tick (TIME-1, TIME-2)
 
 ### Slice 0.2 — On-rails vessel + patched conics
-- [ ] T4 — Body/SOI model + one vessel with orbital elements → vessel data structure persists an orbit (ORBIT-1)
-- [ ] T5 — Closed-form Kepler propagator `position(game-time)` → position at t+arbitrary matches numeric reference within tolerance, no stepping (ORBIT-2)
-- [ ] T6 — SOI-crossing detection → predicted crossing time registered as a POI, orbit re-parents on cross (ORBIT-3)
+- [x] T4 — Body/SOI model + one vessel with orbital elements → vessel data structure persists an orbit (ORBIT-1)
+- [x] T5 — Closed-form Kepler propagator `position(game-time)` → position at t+arbitrary matches numeric reference within tolerance, no stepping (ORBIT-2)
+- [x] T6 — SOI-crossing detection → predicted crossing time registered as a POI, orbit re-parents on cross (ORBIT-3)
 
 ### Slice 0.3 — Client connect + observe
-- [ ] T7 — Client connects to server, receives world handshake → client lists the vessel and current game-time (NET-1)
-- [ ] T8 — Snapshot emitter at 20–30 Hz + client interpolation → client renders vessel position smoothly from snapshots (NET-4, NET-5)
+- [x] T7 — Client connects to server, receives world handshake → client lists the vessel and current game-time (NET-1)
+- [x] T8 — Snapshot emitter at 20–30 Hz + client interpolation → client renders vessel position smoothly from snapshots (NET-4, NET-5)
 
 ### Slice 0.4 — Warp vote + auto-limit
-- [ ] T9 — Warp request + unanimous vote state machine → warp starts only on all-approve; non-approve blocks (TIME-3)
-- [ ] T10 — Two warp kinds plumbed (physics / on-rails), on-rails advances clock fast → x1000 advances game-time, vessel stays on analytic orbit (TIME-7)
-- [ ] T11 — Auto-limit to earliest global POI → warp halts exactly at next SOI crossing, never past (TIME-4)
-- [ ] T12 — Vote membership on connect/disconnect → disconnect mid-warp continues; connect mid-warp halts to baseline (TIME-5, TIME-6)
+- [x] T9 — Warp request + unanimous vote state machine → warp starts only on all-approve; non-approve blocks (TIME-3)
+- [x] T10 — Two warp kinds plumbed (physics / on-rails), on-rails advances clock fast → x1000 advances game-time, vessel stays on analytic orbit (TIME-7)
+- [x] T11 — Auto-limit to earliest global POI → warp halts exactly at next SOI crossing, never past (TIME-4)
+- [x] T12 — Vote membership on connect/disconnect → disconnect mid-warp continues; connect mid-warp halts to baseline (TIME-5, TIME-6)
 
 ### Slice 0.5 — Persistence
-- [ ] T13 — Postgres schema (program, vessel, clock) + write-through on POI/warp-commit → row updates observed at events (PERSIST-1, PERSIST-2)
-- [ ] T14 — Restart restore → kill + restart server; clock, vessel orbit, and POIs resume identically (PERSIST-3, SUSP-1)
+- [x] T13 — Postgres schema (program, vessel, clock) + write-through on POI/warp-commit → row updates observed at events (PERSIST-1, PERSIST-2)
+- [x] T14 — Restart restore → kill + restart server; clock, vessel orbit, and POIs resume identically (PERSIST-3, SUSP-1)
 
 ---
 
