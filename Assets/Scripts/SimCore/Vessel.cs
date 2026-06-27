@@ -3,12 +3,13 @@ namespace KSPClone.SimCore
     public sealed class Vessel
     {
         public VesselId Id { get; }
-        public bool OnRails { get; set; }
+        public Orbit Orbit { get; set; }
+        public bool OnRails { get; set; } = true;
 
-        public Vessel(VesselId id)
+        public Vessel(VesselId id, Orbit orbit)
         {
             Id = id;
-            OnRails = true;
+            Orbit = orbit;
         }
     }
 }
