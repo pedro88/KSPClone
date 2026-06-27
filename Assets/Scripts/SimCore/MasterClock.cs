@@ -12,5 +12,17 @@ namespace KSPClone.SimCore
         {
             _gameTimeSeconds += dtSeconds * Rate;
         }
+
+        /// <summary>
+        /// Hard-set the game-time to an exact value. The only legitimate
+        /// caller is <see cref="WarpAutoLimit"/> when the warp's final
+        /// tick would overshoot the POI target (TIME-4). It is *not* a
+        /// generic time machine — every other writer must go through
+        /// <see cref="Advance"/>.
+        /// </summary>
+        public void ClampTo(double gameTimeSeconds)
+        {
+            _gameTimeSeconds = gameTimeSeconds;
+        }
     }
 }
