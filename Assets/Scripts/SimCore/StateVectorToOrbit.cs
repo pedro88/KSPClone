@@ -52,10 +52,14 @@ namespace KSPClone.SimCore
                 if (n.Y < 0.0) raan = 2.0 * Math.PI - raan;
             }
 
-            // Argument of periapsis (undefined when circular)
+            // Argument of periapsis (undefined when circular).
             double argp;
-            if (nMag < 1e-12 || ecc < 1e-12)
+            if (ecc < 1e-12)
                 argp = 0.0;
+            else if (nMag < 1e-12)
+                // Equatorial orbit: the node is undefined, so use the longitude
+                // of periapsis measured from the x-axis (retrograde flips sign).
+                argp = KeplerPropagator.WrapTwoPi(Math.Atan2(eVec.Y, eVec.X) * (h.Z < 0.0 ? -1.0 : 1.0));
             else
             {
                 var cosArgp = Math.Clamp(Vector3d.Dot(n, eVec) / (nMag * ecc), -1.0, 1.0);
