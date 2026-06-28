@@ -48,7 +48,7 @@ namespace KSPClone.Server
             VesselId = vesselId;
             BubbleId = bubbleId;
             Body.position = localPosition;
-            Body.velocity = localVelocity;
+            Body.linearVelocity = localVelocity;
             transform.position = localPosition;
         }
 
