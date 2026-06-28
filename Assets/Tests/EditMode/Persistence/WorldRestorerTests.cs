@@ -1,3 +1,5 @@
+#nullable enable annotations
+
 using NUnit.Framework;
 using KSPClone.Persistence;
 using KSPClone.SimCore;

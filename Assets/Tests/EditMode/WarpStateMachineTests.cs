@@ -1,3 +1,5 @@
+#nullable enable annotations
+
 using System.Collections.Generic;
 using NUnit.Framework;
 using KSPClone.SimCore;

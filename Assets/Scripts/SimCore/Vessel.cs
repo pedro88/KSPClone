@@ -1,3 +1,5 @@
+#nullable enable annotations
+
 namespace KSPClone.SimCore
 {
     public sealed class Vessel
