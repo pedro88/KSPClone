@@ -1,5 +1,6 @@
 using UnityEngine;
 using KSPClone.SimCore;
+using KSPClone.Net;
 using KSPClone.Persistence;
 
 namespace KSPClone.Server
@@ -16,10 +17,14 @@ namespace KSPClone.Server
         private string _connectionString =
             "Host=localhost;Port=5433;Username=greenu;Password=greenu;Database=greenu";
 
+        [SerializeField] private int _port = 9050;
+
         public ServerSimulation Sim { get; private set; }
 
         private WorldRepository _repo;
         private PersistenceEventSink _persistence;
+        private LiteNetLibServerTransport _transport;
+        private ServerNetHost _host;
 
         private void Awake()
         {
@@ -28,14 +33,24 @@ namespace KSPClone.Server
             Sim = new ServerSimulation(world);
             WirePersistence();
 
+            _transport = new LiteNetLibServerTransport();
+            _transport.Start(_port);
+            _host = new ServerNetHost(_transport, Sim);
+
             Debug.Log($"[server] spine up: {world.Vessels.Count} vessel(s), " +
                       $"gameTime={world.Clock.GameTimeSeconds:F1}, " +
-                      $"persistence={(_repo is null ? "off" : "on")}, authoritative=true");
+                      $"persistence={(_repo is null ? "off" : "on")}, listening on :{_port}, authoritative=true");
         }
 
         private void Update()
         {
             Sim.Advance(Time.unscaledDeltaTime);
+            _host.Poll();
+        }
+
+        private void OnDestroy()
+        {
+            _transport?.Dispose();
         }
 
         private SimWorld RestoreOrSeed(BodyRegistry bodies)

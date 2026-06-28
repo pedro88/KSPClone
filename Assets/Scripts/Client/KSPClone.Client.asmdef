@@ -1,10 +1,9 @@
 {
-    "name": "KSPClone.Server",
-    "rootNamespace": "KSPClone.Server",
+    "name": "KSPClone.Client",
+    "rootNamespace": "KSPClone.Client",
     "references": [
         "KSPClone.SimCore",
-        "KSPClone.Net",
-        "KSPClone.Persistence"
+        "KSPClone.Net"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
