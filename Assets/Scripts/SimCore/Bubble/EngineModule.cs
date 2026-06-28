@@ -105,7 +105,7 @@ namespace KSPClone.SimCore
             if (totalFlow <= 0.0 || m1 >= m0) return 0.0;
             // Effective Isp weighted by mass flow: <Isp> = Σ(ṁᵢ·Ispᵢ) / Σ(ṁᵢ)
             var ispEff = totalIspWeightedFlow / totalFlow;
-            return ispEff * G0 * Math.Log(m0 / m1); // Tsiolkovsky Δv
+            return ispEff * EngineModule.G0 * Math.Log(m0 / m1); // Tsiolkovsky Δv
         }
     }
 }

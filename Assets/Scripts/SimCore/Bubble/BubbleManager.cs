@@ -227,12 +227,11 @@ namespace KSPClone.SimCore
         {
             // Did every member already share one bubble id?
             BubbleId? shared = null;
-            var mixedSources = false;
             foreach (var v in cluster.Vessels)
             {
-                if (v.BubbleId is not { } bid) { mixedSources = true; continue; }
+                if (v.BubbleId is not { } bid) { shared = null; break; }
                 if (shared is null) shared = bid;
-                else if (!shared.Value.Equals(bid)) { mixedSources = true; shared = null; break; }
+                else if (!shared.Value.Equals(bid)) { shared = null; break; }
             }
 
             // (a) Whole cluster already shared one bubble → reuse it.

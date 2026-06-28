@@ -167,14 +167,14 @@ namespace KSPClone.SimCore
         /// </summary>
         private PhysicsBubble AssignToBubble(Vessel vessel, Vector3d worldPos)
         {
-            foreach (var bubble in _bubbles.All)
+            foreach (var bubble in _registry.All)
             {
                 if (bubble.MemberCount == 0) continue;
                 if (bubble.Contains(vessel.Id)) return bubble;
             }
             PhysicsBubble? nearest = null;
             double nearestDistSq = double.PositiveInfinity;
-            foreach (var bubble in _bubbles.All)
+            foreach (var bubble in _registry.All)
             {
                 if (bubble.MemberCount == 0) continue;
                 var d = bubble.GlobalOrigin - worldPos;
