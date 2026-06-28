@@ -173,9 +173,9 @@ namespace KSPClone.SimCore
             return null;
         }
 
-        private List<Cluster> Cluster(List<CandidateVessel> candidates)
+        private List<VesselCluster> Cluster(List<CandidateVessel> candidates)
         {
-            var clusters = new List<Cluster>();
+            var clusters = new List<VesselCluster>();
             if (candidates.Count == 0) return clusters;
 
             // Union-find keyed by VesselId index.
@@ -211,7 +211,7 @@ namespace KSPClone.SimCore
             }
 
             foreach (var bucket in byRoot.Values)
-                clusters.Add(new Cluster(bucket));
+                clusters.Add(new VesselCluster(bucket));
             return clusters;
         }
 
@@ -278,7 +278,7 @@ namespace KSPClone.SimCore
             public CandidateVessel(Vessel v) { Vessel = v; }
         }
 
-        private sealed class Cluster
+        private sealed class VesselCluster
         {
             public List<Vessel> Vessels { get; }
             public bool WasExisting;
