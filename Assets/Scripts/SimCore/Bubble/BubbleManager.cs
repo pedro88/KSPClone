@@ -223,7 +223,7 @@ namespace KSPClone.SimCore
             return dx * dx + dy * dy + dz * dz <= PhysicsRangeRadiusSquared;
         }
 
-        private PhysicsBubble ResolveBubbleForCluster(Cluster cluster)
+        private PhysicsBubble ResolveBubbleForCluster(VesselCluster cluster)
         {
             // Did every member already share one bubble id?
             BubbleId? shared = null;
@@ -257,7 +257,7 @@ namespace KSPClone.SimCore
             return fresh;
         }
 
-        private static Vector3d ClusterCentroid(Cluster cluster)
+        private static Vector3d ClusterCentroid(VesselCluster cluster)
         {
             double sx = 0, sy = 0, sz = 0;
             int n = 0;
@@ -282,7 +282,7 @@ namespace KSPClone.SimCore
         {
             public List<Vessel> Vessels { get; }
             public bool WasExisting;
-            public Cluster(List<Vessel> vessels) { Vessels = vessels; }
+            public VesselCluster(List<Vessel> vessels) { Vessels = vessels; }
         }
     }
 }
