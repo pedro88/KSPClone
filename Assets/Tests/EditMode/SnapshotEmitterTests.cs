@@ -18,7 +18,7 @@ namespace KSPClone.SimCore.Tests
             world.RegisterVessel(new Vessel(VesselId.New(),
                 new Orbit(7e6, 0, 0, 0, 0, 0, 0, CelestialBodyId.Planet)));
             var received = new List<SnapshotBundle>();
-            var emitter = new SnapshotEmitter(world, rateHz, onBundle: received.Add);
+            var emitter = new SnapshotEmitter(world, new ConnectionRegistry(), rateHz, onBundle: received.Add);
             return (world, emitter, received);
         }
 

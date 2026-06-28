@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using KSPClone.Persistence;
 using KSPClone.SimCore;
@@ -62,7 +63,7 @@ namespace KSPClone.Persistence.Tests
             var loaded = new List<(VesselId, Orbit, double, bool)>();
             foreach (var row in repo.LoadVessels()) loaded.Add(row);
             Assert.AreEqual(1, loaded.Count);
-            var (id, orb, vc, onRails) = loaded[0];
+            (VesselId id, Orbit orb, double vc, bool onRails) = loaded[0];
             Assert.AreEqual(vessel.Id.Value, id.Value);
             Assert.AreEqual(orbit.SemiMajorAxis, orb.SemiMajorAxis, 1e-12);
             Assert.AreEqual(orbit.Eccentricity, orb.Eccentricity, 1e-15);

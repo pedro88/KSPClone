@@ -121,12 +121,11 @@ namespace KSPClone.SimCore.Tests
                     $"Second {i}: expected 60 ticks/s, got {ticksPerSecondLog[i]}.");
         }
 
-        private static (SimScheduler scheduler, List<double> ticks) MakeScheduler()
+        private static (SimScheduler scheduler, TickRecorder recorder) MakeScheduler()
         {
             var world = new SimWorld();
-            var ticks = new List<double>();
-            world.TickRecorded += dt => ticks.Add(dt);
-            return (new SimScheduler(world), ticks);
+            var recorder = new TickRecorder(world);
+            return (new SimScheduler(world), recorder);
         }
     }
 }
