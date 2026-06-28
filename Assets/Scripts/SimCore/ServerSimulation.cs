@@ -27,6 +27,8 @@ namespace KSPClone.SimCore
         public event Action<Vessel>? VesselReParented;
         /// <summary>Fired at a committed warp endpoint (for persistence write-through).</summary>
         public event Action<double>? WarpCommitted;
+        /// <summary>Fired for each emitted snapshot bundle (the transport broadcasts it).</summary>
+        public event Action<SnapshotBundle>? SnapshotEmitted;
 
         private readonly SimScheduler _scheduler;
         private readonly PoiScanner _poiScanner;
@@ -47,7 +49,8 @@ namespace KSPClone.SimCore
             _autoLimit = new WarpAutoLimit(World, Pois, Warp);
             // Subscribes to connect/disconnect events; kept alive by those delegates.
             new WarpMembershipSync(Connections, Warp);
-            Snapshots = new SnapshotEmitter(World, Connections, snapshotRateHz);
+            Snapshots = new SnapshotEmitter(World, Connections, snapshotRateHz,
+                onBundle: b => SnapshotEmitted?.Invoke(b));
 
             // Refresh POIs and arm the auto-limit each time a warp goes Active.
             Warp.WarpStarted += _ => { _poiScanner.RescanAll(); _autoLimit.Arm(); };
