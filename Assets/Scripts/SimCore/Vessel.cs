@@ -40,6 +40,14 @@ namespace KSPClone.SimCore
         public Vector3d? CachedLocalVelocity { get; set; }
 
         /// <summary>
+        /// True if at least one of the vessel's engines is producing
+        /// thrust this tick. Reported by the integrator; consulted by
+        /// <see cref="WarpSafeEvaluator"/> to keep an active burn from
+        /// being demoted to on-rails mid-throttle (PHYS-3).
+        /// </summary>
+        public bool ThrustActive { get; set; }
+
+        /// <summary>
         /// True iff the vessel is propagated analytically (no bubble, no
         /// rigid body). Backwards-compatible read of
         /// <see cref="State"/>; kept as a property so every existing
