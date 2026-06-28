@@ -55,8 +55,8 @@ namespace KSPClone.SimCore.Tests
             Assert.IsTrue(al.HasFired, "Auto-limit must have fired by now.");
             Assert.AreEqual(WarpState.Idle, fsm.State);
             Assert.AreEqual(1.0, world.Clock.Rate);
-            Assert.AreEqual(poiTime, world.Clock.GameTimeSeconds, SimScheduler.FixedDt,
-                $"Clock must halt at the POI time exactly (never past); got {world.Clock.GameTimeSeconds}.");
+            Assert.AreEqual(poiTime, world.Clock.GameTimeSeconds, 1e-9,
+                $"Clock must halt at the POI time exactly via ClampTo (never past); got {world.Clock.GameTimeSeconds}.");
         }
 
         [Test]

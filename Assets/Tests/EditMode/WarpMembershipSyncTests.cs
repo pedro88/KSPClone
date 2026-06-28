@@ -55,6 +55,29 @@ namespace KSPClone.SimCore.Tests
         }
 
         [Test]
+        public void DisconnectWhileVoting_LastBlocker_CompletesUnanimity_AndActivates()
+        {
+            var conns = new ConnectionRegistry();
+            var clock = new MasterClock();
+            var fsm = new WarpStateMachine(clock, conns);
+            new WarpMembershipSync(conns, fsm);
+
+            var a = conns.AddNew();
+            var b = conns.AddNew();
+            var c = conns.AddNew();
+            fsm.RequestWarp(new WarpRequest(a.Id, 1000.0, WarpKind.OnRails)); // a approved
+            fsm.Approve(b.Id);                                                // a, b approved; c pending
+            Assert.AreEqual(WarpState.Voting, fsm.State);
+
+            // The only remaining blocker disconnects → the rest are unanimous,
+            // so the warp must start (TIME-5).
+            conns.Remove(c.Id);
+            Assert.AreEqual(WarpState.Active, fsm.State,
+                "Removing the last non-approver must complete unanimity and activate.");
+            Assert.AreEqual(1000.0, clock.Rate);
+        }
+
+        [Test]
         public void DisconnectWhileActive_DropsVoter_KeepsWarpActive()
         {
             var conns = new ConnectionRegistry();

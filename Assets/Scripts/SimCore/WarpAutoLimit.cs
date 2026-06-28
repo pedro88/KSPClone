@@ -55,20 +55,10 @@ namespace KSPClone.SimCore
 
             if (_world.Clock.GameTimeSeconds >= end)
             {
-                // The clock may have advanced past the POI during the
-                // final tick; clamp to the POI time exactly.
-                // We do this by reducing MasterClock.GameTimeSeconds by
-                // the overshoot in real-seconds. Since Rate is the
-                // multiplier, the overshoot in wall-seconds is
-                // (gameTime - end) / Rate.
-                var overshootGame = _world.Clock.GameTimeSeconds - end;
-                var rate = _world.Clock.Rate;
-                if (rate > 0.0 && overshootGame > 0.0)
-                {
-                    var overshootWall = overshootGame / rate;
-                    _world.Clock.Advance(-overshootWall);
-                }
-
+                // The final tick may have advanced past the POI; land the clock
+                // exactly on it (ClampTo is the only sanctioned non-Advance writer
+                // of game-time — see MasterClock.ClampTo).
+                _world.Clock.ClampTo(end);
                 _fsm.Halt(WarpStateMachine.WarpEndReason.AutoLimit);
                 HasFired = true;
                 WarpCommitted?.Invoke(end);

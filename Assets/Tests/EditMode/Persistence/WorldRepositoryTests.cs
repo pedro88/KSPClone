@@ -120,5 +120,28 @@ namespace KSPClone.Persistence.Tests
             foreach (var _ in repo.LoadVessels()) count++;
             Assert.AreEqual(0, count);
         }
+
+        [Test]
+        public void WriteWarpCommitAtomic_PersistsClockAndVessels_InOneTransaction()
+        {
+            if (!_connectionAvailable) Assert.Ignore("Postgres not reachable on localhost:5433.");
+
+            var repo = new WorldRepository(ConnectionString);
+            var v1 = new Vessel(VesselId.New(),
+                new Orbit(7e6, 0.1, 0, 0, 0, 0, 0, CelestialBodyId.Planet)) { VesselClockSeconds = 42.0 };
+            var v2 = new Vessel(VesselId.New(),
+                new Orbit(9e6, 0.2, 0, 0, 0, 0, 0, CelestialBodyId.Planet)) { VesselClockSeconds = 42.0 };
+
+            repo.WriteWarpCommitAtomic(gameTime: 4242.0, warpRate: 1.0, new[] { v1, v2 });
+
+            var clock = repo.LoadClock();
+            Assert.IsTrue(clock.HasValue);
+            Assert.AreEqual(4242.0, clock!.Value.gameTime, 1e-12);
+            Assert.AreEqual(1.0, clock.Value.warpRate, 1e-12);
+
+            int count = 0;
+            foreach (var _ in repo.LoadVessels()) count++;
+            Assert.AreEqual(2, count, "Both vessels must be committed alongside the clock.");
+        }
     }
 }

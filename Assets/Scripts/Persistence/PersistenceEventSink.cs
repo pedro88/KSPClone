@@ -43,12 +43,10 @@ namespace KSPClone.Persistence
         /// </summary>
         public void OnWarpCommit(double committedGameTime)
         {
-            // UpsertClock + each vessel's upsert in one transaction.
-            // Npgsql 8 batches implicitly on a single connection when
-            // we share the connection across statements.
-            _repo.UpsertClock(committedGameTime, warpRate: 1.0);
-            foreach (var vessel in _world.Vessels.Values)
-                _repo.UpsertVessel(vessel);
+            // Clock + every vessel in ONE transaction so coupled facts commit
+            // atomically (Constitution Art. 8) — a crash mid-write can't leave
+            // the clock ahead of the vessel rows.
+            _repo.WriteWarpCommitAtomic(committedGameTime, warpRate: 1.0, _world.Vessels.Values);
         }
     }
 }

@@ -52,11 +52,10 @@ namespace KSPClone.SimCore
             switch (_fsm.State)
             {
                 case WarpState.Voting:
-                    if (_fsm.Vote.RemoveRequired(session.Id) && _fsm.Vote.IsUnanimous)
-                        _fsm.Approve(session.Id); // never happens, but keeps the contract
-                    // If the disconnector was the requester, we leave
-                    // the vote open — they were already approved, the
-                    // remaining voters can still approve.
+                    // Drop them from the required set; the remaining voters may
+                    // now be unanimous (TIME-5), so re-evaluate and possibly start.
+                    _fsm.Vote.RemoveRequired(session.Id);
+                    _fsm.ReevaluateUnanimity();
                     break;
                 case WarpState.Active:
                     // TIME-5: warp continues, drop the disconnector as a voter.

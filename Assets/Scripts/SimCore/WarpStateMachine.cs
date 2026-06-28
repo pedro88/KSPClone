@@ -157,6 +157,16 @@ namespace KSPClone.SimCore
             if (Vote.IsUnanimous) Activate();
         }
 
+        /// <summary>
+        /// Re-check unanimity while Voting and activate if every remaining
+        /// required voter has approved. Called after the required set shrinks
+        /// (e.g. a non-approving voter disconnects mid-vote, TIME-5).
+        /// </summary>
+        public void ReevaluateUnanimity()
+        {
+            if (State == WarpState.Voting && Vote.IsUnanimous) Activate();
+        }
+
         public bool Cancel(PlayerId requester)
         {
             if (State != WarpState.Voting) return false;

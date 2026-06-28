@@ -79,44 +79,52 @@ namespace KSPClone.Persistence
             cmd.ExecuteNonQuery();
         }
 
+        private const string ClockUpsertSql = @"
+            INSERT INTO world_clock (id, game_time, warp_rate) VALUES (0, @gt, @wr)
+            ON CONFLICT (id) DO UPDATE SET game_time = EXCLUDED.game_time,
+                                          warp_rate = EXCLUDED.warp_rate;
+        ";
+
         public void UpsertClock(double gameTime, double warpRate)
         {
-            const string sql = @"
-                INSERT INTO world_clock (id, game_time, warp_rate) VALUES (0, @gt, @wr)
-                ON CONFLICT (id) DO UPDATE SET game_time = EXCLUDED.game_time,
-                                              warp_rate = EXCLUDED.warp_rate;
-            ";
             using var conn = new NpgsqlConnection(_connectionString);
             conn.Open();
-            using var cmd = new NpgsqlCommand(sql, conn);
+            using var cmd = new NpgsqlCommand(ClockUpsertSql, conn);
             cmd.Parameters.AddWithValue("gt", gameTime);
             cmd.Parameters.AddWithValue("wr", warpRate);
             cmd.ExecuteNonQuery();
         }
 
+        private const string VesselUpsertSql = @"
+            INSERT INTO vessel (id, parent_body, semi_major_axis, eccentricity,
+                                inclination, raan, argp, mean_anom_epoch,
+                                epoch_game_time, vessel_clock, on_rails)
+            VALUES (@id, @parent_body, @sma, @ecc, @inc, @raan, @argp, @m0,
+                    @epoch, @vc, @on_rails)
+            ON CONFLICT (id) DO UPDATE SET
+                parent_body     = EXCLUDED.parent_body,
+                semi_major_axis = EXCLUDED.semi_major_axis,
+                eccentricity    = EXCLUDED.eccentricity,
+                inclination     = EXCLUDED.inclination,
+                raan            = EXCLUDED.raan,
+                argp            = EXCLUDED.argp,
+                mean_anom_epoch = EXCLUDED.mean_anom_epoch,
+                epoch_game_time = EXCLUDED.epoch_game_time,
+                vessel_clock    = EXCLUDED.vessel_clock,
+                on_rails        = EXCLUDED.on_rails;
+        ";
+
         public void UpsertVessel(Vessel vessel)
         {
-            const string sql = @"
-                INSERT INTO vessel (id, parent_body, semi_major_axis, eccentricity,
-                                    inclination, raan, argp, mean_anom_epoch,
-                                    epoch_game_time, vessel_clock, on_rails)
-                VALUES (@id, @parent_body, @sma, @ecc, @inc, @raan, @argp, @m0,
-                        @epoch, @vc, @on_rails)
-                ON CONFLICT (id) DO UPDATE SET
-                    parent_body     = EXCLUDED.parent_body,
-                    semi_major_axis = EXCLUDED.semi_major_axis,
-                    eccentricity    = EXCLUDED.eccentricity,
-                    inclination     = EXCLUDED.inclination,
-                    raan            = EXCLUDED.raan,
-                    argp            = EXCLUDED.argp,
-                    mean_anom_epoch = EXCLUDED.mean_anom_epoch,
-                    epoch_game_time = EXCLUDED.epoch_game_time,
-                    vessel_clock    = EXCLUDED.vessel_clock,
-                    on_rails        = EXCLUDED.on_rails;
-            ";
             using var conn = new NpgsqlConnection(_connectionString);
             conn.Open();
-            using var cmd = new NpgsqlCommand(sql, conn);
+            using var cmd = new NpgsqlCommand(VesselUpsertSql, conn);
+            BindVessel(cmd, vessel);
+            cmd.ExecuteNonQuery();
+        }
+
+        private static void BindVessel(NpgsqlCommand cmd, Vessel vessel)
+        {
             cmd.Parameters.Add(new NpgsqlParameter("id", NpgsqlDbType.Uuid) { Value = vessel.Id.Value });
             cmd.Parameters.AddWithValue("parent_body", (int)vessel.Orbit.ParentBody);
             cmd.Parameters.AddWithValue("sma", vessel.Orbit.SemiMajorAxis);
@@ -128,7 +136,31 @@ namespace KSPClone.Persistence
             cmd.Parameters.AddWithValue("epoch", vessel.Orbit.EpochGameTime);
             cmd.Parameters.AddWithValue("vc", vessel.VesselClockSeconds);
             cmd.Parameters.AddWithValue("on_rails", vessel.OnRails);
-            cmd.ExecuteNonQuery();
+        }
+
+        /// <summary>
+        /// Atomically write a committed warp endpoint: the clock plus every
+        /// supplied vessel in a single transaction, so coupled facts commit
+        /// together or not at all (PERSIST-2, Constitution Art. 8).
+        /// </summary>
+        public void WriteWarpCommitAtomic(double gameTime, double warpRate, IEnumerable<Vessel> vessels)
+        {
+            using var conn = new NpgsqlConnection(_connectionString);
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+            using (var clockCmd = new NpgsqlCommand(ClockUpsertSql, conn, tx))
+            {
+                clockCmd.Parameters.AddWithValue("gt", gameTime);
+                clockCmd.Parameters.AddWithValue("wr", warpRate);
+                clockCmd.ExecuteNonQuery();
+            }
+            foreach (var vessel in vessels)
+            {
+                using var vesselCmd = new NpgsqlCommand(VesselUpsertSql, conn, tx);
+                BindVessel(vesselCmd, vessel);
+                vesselCmd.ExecuteNonQuery();
+            }
+            tx.Commit();
         }
 
         public (double gameTime, double warpRate)? LoadClock()
