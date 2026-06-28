@@ -13,13 +13,13 @@ Ordering follows the constitution's "prove the spine first" (Art. 10): M0 is the
 Updated as milestones land. Detailed ticket status lives in [GitHub issues](https://github.com/pedro88/KSPClone/issues) (one issue per task).
 
 - **M0 — Skeleton (the spine): ✅ COMPLETE.** The full server→wire→client spine is built, tested, and demonstrated end-to-end over a **headless dedicated-server build** (T1) talking to a client over **real LiteNetLib UDP**. Highlights: `SimCore.ServerSimulation` composes the warp-vote FSM, auto-limit, POI scan, SOI re-parenting, snapshot emitter and connection registry per fixed tick; `ServerBootstrap` restores-or-seeds (`WorldSeed`) with Postgres write-through (PERSIST-1/2/3 verified against Postgres); `KSPClone.Net` ships the P-1 wire codec (full snapshots, lossless round-trip), a loopback double (integration-tested) and the LiteNetLib transport; `KSPClone.Client` connects, interpolates snapshots, and sends warp commands; `ServerBuilder` produces the headless `-batchmode` server binary. Exit requirements TIME-1/2/3/4/5/6, ORBIT-1/2/3, NET-1/4/5, PERSIST-1/2/3 all live and verified. Known deferrals carried into M1: no on-rails orbit/SOI-change replication channel yet (client vessel `parent`/elements come from the connect handshake; position is streamed); snapshots ship ReliableOrdered (move to unreliable-sequenced when measured). Warp policy: **ADR-0010 amended** — bands contiguous (≤4× physics, >4× on-rails), no gap.
-- **M1 — Physics bubble + prediction:** not started.
+- **M1 — Physics bubble + prediction: ✅ COMPLETE (code); runtime validation pending.** All 19 tickets (T01–T19) landed on `feat/m1`. Decisions **P-1** and **P-4** resolved up-front via ADR-0012 (floating-origin rebasing: 1024 m threshold, centroid origin, merge-keep-larger, empty bubbles destroyed) and ADR-0013 (full doubles on the wire, unreliable-sequenced snapshots + reliable-ordered events with the 11-tag event surface). SimCore data model: `PhysicsBubble`, `BubbleRegistry`, `BubbleManager` (clustering pass, 50 km radius via M1-T02), `FloatingOriginManager`, `PromotionController`, `DemotionController`, `WarpSafeEvaluator`, `RigidVesselMass`, `EngineModule` + `VesselEngineRegistry` (Tsiolkovsky-accurate mass flow), `StructuralFailureSystem`, `InputChannel`, `ClientPredictor` + `ClientReconciler` + `LatencyMonitor`, `SuspensionController` + `VesselSnapshot` + `SnapshotStore`, `DockingSystem` + `DockingMerger`. Server/Unity host: `UnityBubbleHost` (PhysicsScene per bubble), `RigidVesselBody`, `BubbleIntegrator` (60 Hz step with gravity, thrust, attitude, rebase). Net/P-1: `WireCodec` extended with `PilotInput` (MessageType 4). Exit requirements PHYS-1/2/3/4/5/6, NET-1/2/3/6, SUSP-2/3/4, ART-1/3/4 all implemented and unit-tested in EditMode. Caveat: Unity-side host was authored but not run against a live editor in this cycle (batchmode boot timed out); runtime validation of `BubbleIntegrator.Step()` and the per-bubble `PhysicsScene` allocation happens on next in-editor run.
 - **M2 — Multi-crew stations:** not started.
 - **M3 — Collaborative VAB:** not started.
 - **M4 — Comms & ground control:** not started.
 - **M5 — Progression (Science mode):** not started.
 
-P-1 (wire format) is **partially resolved**: pure full snapshots shipped, per-vessel seq and delta-against-acked-baseline land with the prediction loop in M1 Slice 1.3.
+P-1 and P-4 are **resolved**: ADR-0012 + ADR-0013.
 
 Open decisions remaining (gating specific slices) are tracked at the bottom of this file.
 
@@ -64,28 +64,28 @@ Open decisions remaining (gating specific slices) are tracked at the bottom of t
 **Demo:** player loads a vessel (it promotes), lights the engine and hand-flies under prediction with no lag; a second vessel approaches and they dock with no hitch; player leaves mid-burn → vessel suspends; reload resumes from snapshot.
 
 ### Slice 1.1 — Bubble + floating origin (resolve P-4 first)
-- [ ] T15 — Bubble manager: create/destroy bubble per vessel cluster → multiple bubbles coexist far apart in world coords (PHYS-1)
-- [ ] T16 — Per-bubble floating origin + rebasing → vessel at 10^9 m from origin simulates without precision artifacts (PHYS-1, Art.3)
-- [ ] T17 — Promotion on player approach/load → vessel switches on-rails→active at range threshold (PHYS-2)
-- [ ] T18 — Demotion when warp-safe + unattended → vessel returns to analytic orbit, state continuous across switch (PHYS-3)
+- [x] T15 — Bubble manager: create/destroy bubble per vessel cluster → multiple bubbles coexist far apart in world coords (PHYS-1)
+- [x] T16 — Per-bubble floating origin + rebasing → vessel at 10^9 m from origin simulates without precision artifacts (PHYS-1, Art.3)
+- [x] T17 — Promotion on player approach/load → vessel switches on-rails→active at range threshold (PHYS-2)
+- [x] T18 — Demotion when warp-safe + unattended → vessel returns to analytic orbit, state continuous across switch (PHYS-3)
 
 ### Slice 1.2 — Active rigid-body flight (resolve P-1 first)
-- [ ] T19 — Rigid-body integrator in bubble, thrust + gravity → vessel accelerates under engine, matches expected delta-v (PHYS-4)
-- [ ] T20 — Input channel: pilot throttle/attitude routed to server → server applies authoritative inputs (NET-1, CREW-1 partial)
-- [ ] T21 — Discrete structural failure at load threshold → joint/decoupler breaks as an event, no soft flex (PHYS-6)
+- [x] T19 — Rigid-body integrator in bubble, thrust + gravity → vessel accelerates under engine, matches expected delta-v (PHYS-4)
+- [x] T20 — Input channel: pilot throttle/attitude routed to server → server applies authoritative inputs (NET-1, CREW-1 partial)
+- [x] T21 — Discrete structural failure at load threshold → joint/decoupler breaks as an event, no soft flex (PHYS-6)
 
 ### Slice 1.3 — Prediction + reconciliation
-- [ ] T22 — Client predicts controlled vessel from local inputs → stick has zero perceived lag at 80 ms simulated RTT (NET-2, NET-6)
-- [ ] T23 — Server reconciliation, smoothed sub-threshold / snap on large desync → injected divergence corrects without visible pop under threshold (NET-3)
+- [x] T22 — Client predicts controlled vessel from local inputs → stick has zero perceived lag at 80 ms simulated RTT (NET-2, NET-6)
+- [x] T23 — Server reconciliation, smoothed sub-threshold / snap on large desync → injected divergence corrects without visible pop under threshold (NET-3)
 
 ### Slice 1.4 — Suspension lifecycle
-- [ ] T24 — Suspend non-warp-safe vessel on last-leave → snapshot taken, vessel clock pauses (SUSP-3)
-- [ ] T25 — Resume from snapshot on reload, no retro-sim → reloaded vessel continues exactly from snapshot state (SUSP-4)
-- [ ] T26 — Demote (not suspend) when warp-safe on last-leave → orbiting vessel goes on-rails instead (SUSP-2)
+- [x] T24 — Suspend non-warp-safe vessel on last-leave → snapshot taken, vessel clock pauses (SUSP-3)
+- [x] T25 — Resume from snapshot on reload, no retro-sim → reloaded vessel continues exactly from snapshot state (SUSP-4)
+- [x] T26 — Demote (not suspend) when warp-safe on last-leave → orbiting vessel goes on-rails instead (SUSP-2)
 
 ### Slice 1.5 — Docking
-- [ ] T27 — Two vessels in one bubble, docking-port latch → ports within tolerance join into one vessel (PHYS-5)
-- [ ] T28 — No authority handoff at contact → both vessels already share the bubble before latch; no state jump (PHYS-5, Art.1)
+- [x] T27 — Two vessels in one bubble, docking-port latch → ports within tolerance join into one vessel (PHYS-5)
+- [x] T28 — No authority handoff at contact → both vessels already share the bubble before latch; no state jump (PHYS-5, Art.1)
 
 ---
 
