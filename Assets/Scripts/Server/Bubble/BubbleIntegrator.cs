@@ -76,8 +76,12 @@ namespace KSPClone.Server
 
         private void StepBubble(PhysicsBubble bubble, PhysicsScene scene)
         {
-            // (1) Pre-step forces would be applied here. Slice 1.2.
+            // (1) Pre-step forces. Apply gravity from each vessel's SOI body
+            //     (PHYS-4: single body per vessel, ORBIT-1). The body's world
+            //     position is subtracted by the bubble's GlobalOrigin in
+            //     doubles — never in floats (ADR-0012 §6).
             CollectRigidBodies(bubble, _scratch);
+            ApplyGravity(bubble, _scratch);
 
             // (2) Step the bubble's physics scene independently of Unity's
             // automatic simulation (SimulationMode.Script + Physics.Simulate).
@@ -117,6 +121,23 @@ namespace KSPClone.Server
                     rb.TranslateLocal(newLocal - rb.Body.position);
                     vessel.CachedLocalPosition = ToVector3d(rb.Body.position);
                 }
+            }
+        }
+
+        private void ApplyGravity(PhysicsBubble bubble, List<RigidVesselBody> bodies)
+        {
+            if (_world.Bodies is null) return;
+            foreach (var rb in bodies)
+            {
+                if (!_world.Vessels.TryGetValue(rb.VesselId, out var vessel)) continue;
+                var parentId = vessel.Orbit.ParentBody;
+                if (!_world.Bodies.TryGet(parentId, out var parentBody)) continue;
+                var parentWorldPos = _world.Bodies.WorldPositionOf(parentId, _world.Clock.GameTimeSeconds);
+                var parentLocalPos = parentWorldPos - bubble.GlobalOrigin; // doubles
+                var vesselLocalPos = ToVector3d(rb.Body.position);
+                var a = GravityModel.Acceleration(vesselLocalPos, parentLocalPos, parentBody.GravParameterMu);
+                var f = ToUnity(a) * (float)rb.Body.mass;
+                rb.Body.AddForce(f, ForceMode.Force);
             }
         }
 
