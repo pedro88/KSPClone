@@ -1,3 +1,4 @@
+#nullable enable annotations
 using NUnit.Framework;
 using KSPClone.SimCore;
 
@@ -165,8 +166,8 @@ namespace KSPClone.SimCore.Tests
 
             controller.Suspend(vessel.Id);
 
-            Assert.IsTrue(captured.HasValue);
-            Assert.AreEqual(vessel.Id, captured.Value.VesselId);
+            Assert.IsNotNull(captured);
+            Assert.AreEqual(vessel.Id, captured!.VesselId);
         }
 
         [Test]

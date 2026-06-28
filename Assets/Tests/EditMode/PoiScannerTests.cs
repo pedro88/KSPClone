@@ -71,7 +71,7 @@ namespace KSPClone.SimCore.Tests
             var lowOrbit = new Vessel(VesselId.New(),
                 new Orbit(6_671_000.0, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet));
             var activeVessel = new Vessel(VesselId.New(),
-                new Orbit(6_671_000.0, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet)) { OnRails = false };
+                new Orbit(6_671_000.0, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet)) { State = VesselState.ActivePhysics };
             world.RegisterVessel(lowOrbit);
             world.RegisterVessel(activeVessel);
 
