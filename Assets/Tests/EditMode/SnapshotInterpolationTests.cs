@@ -35,9 +35,10 @@ namespace KSPClone.SimCore.Tests
             interp.OnSnapshot(new VesselSnapshot(default, 0.0, 1, new Vector3d(0, 0, 0), Vector3d.Zero));
             interp.OnSnapshot(new VesselSnapshot(default, 1.0, 2, new Vector3d(10, 0, 0), Vector3d.Zero));
 
+            // Snapshots move along X (0 → 10); midpoint is (5, 0, 0).
             var sample = interp.Sample(0.5);
-            Assert.AreEqual(0.0, sample.X, 1e-12);
-            Assert.AreEqual(5.0, sample.Y, 1e-12);
+            Assert.AreEqual(5.0, sample.X, 1e-12);
+            Assert.AreEqual(0.0, sample.Y, 1e-12);
             Assert.AreEqual(0.0, sample.Z, 1e-12);
         }
 
@@ -96,8 +97,11 @@ namespace KSPClone.SimCore.Tests
                 if (jump > maxJump) maxJump = jump;
                 prev = x;
             }
-            Assert.Less(maxJump, 0.04,
-                $"Per-frame jump at 60 fps must be much smaller than one snapshot interval; got {maxJump} m.");
+            // Smooth linear motion at 100 m/s over 1/60 s frames advances ~1.67 m
+            // per frame, uniformly. A stairstep (hold-then-jump) would spike toward
+            // one snapshot step (~4 m). Assert no frame jumps far beyond the steady rate.
+            Assert.Less(maxJump, 2.0,
+                $"Per-frame jump at 60 fps must stay near the steady rate (no stairstep); got {maxJump} m.");
         }
     }
 }

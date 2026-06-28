@@ -48,8 +48,9 @@ namespace KSPClone.SimCore.Tests
             var (world, emitter, received) = Make(10.0);
             var scheduler = new SimScheduler(world);
 
-            for (int i = 0; i < 60; i++) scheduler.Advance(SimScheduler.FixedDt);
-            for (int i = 0; i < 60; i++) emitter.Tick(SimScheduler.FixedDt);
+            // Interleave clock + emitter ticks so each bundle is stamped with
+            // the game-time at its emission (not the final clock value).
+            for (int i = 0; i < 60; i++) { scheduler.Advance(SimScheduler.FixedDt); emitter.Tick(SimScheduler.FixedDt); }
 
             long prev = -1;
             double prevT = double.NegativeInfinity;
@@ -67,8 +68,9 @@ namespace KSPClone.SimCore.Tests
         {
             var (world, emitter, received) = Make(50.0);
             var scheduler = new SimScheduler(world);
-            scheduler.Advance(SimScheduler.FixedDt);
-            emitter.Tick(SimScheduler.FixedDt);
+            // At 50 Hz (period 20 ms) one 1/60 s tick is not enough to emit;
+            // two interleaved ticks (~33 ms) produce at least one bundle.
+            for (int i = 0; i < 2; i++) { scheduler.Advance(SimScheduler.FixedDt); emitter.Tick(SimScheduler.FixedDt); }
 
             Assert.IsTrue(received.Count >= 1);
             var bundle = received[0];
@@ -88,8 +90,9 @@ namespace KSPClone.SimCore.Tests
 
             var (w2, e2, r2) = Make(30.0);
             var s2 = new SimScheduler(w2);
-            // Half-rate sim tick: 1/120 s steps
-            for (int i = 0; i < 30; i++) { s2.Advance(0.5 * SimScheduler.FixedDt); e2.Tick(0.5 * SimScheduler.FixedDt); }
+            // Half-rate sim tick: 1/120 s steps. Run twice as many iterations
+            // to cover the same 1 s wall-clock window as r1.
+            for (int i = 0; i < 120; i++) { s2.Advance(0.5 * SimScheduler.FixedDt); e2.Tick(0.5 * SimScheduler.FixedDt); }
 
             // Over the same 1-second window, both should produce ~30 bundles.
             Assert.AreEqual(r1.Count, r2.Count, 2);

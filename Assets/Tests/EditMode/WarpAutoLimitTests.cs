@@ -42,13 +42,16 @@ namespace KSPClone.SimCore.Tests
             al.Arm();
             Assert.AreEqual(poiTime, al.EndGameTime);
 
-            // Run the scheduler: at Rate=100, GameTime advances 100× wall.
+            // Run the scheduler at Rate=100 (GameTime advances 100× wall),
+            // ticking the auto-limit each step until it fires (~10 s wall to
+            // reach the POI at GameTime=1000).
             var scheduler = new SimScheduler(world);
-            // 10 s of wall time → GameTime goes from 0 to ~1000.
-            for (int i = 0; i < 60; i++) scheduler.Advance(SimScheduler.FixedDt);
-            al.Tick();
+            for (int i = 0; i < 700 && !al.HasFired; i++)
+            {
+                scheduler.Advance(SimScheduler.FixedDt);
+                al.Tick();
+            }
 
-            // If we overshot, the auto-limit must have snapped us back.
             Assert.IsTrue(al.HasFired, "Auto-limit must have fired by now.");
             Assert.AreEqual(WarpState.Idle, fsm.State);
             Assert.AreEqual(1.0, world.Clock.Rate);
@@ -75,9 +78,12 @@ namespace KSPClone.SimCore.Tests
             al.Arm();
 
             var scheduler = new SimScheduler(world);
-            for (int i = 0; i < 60; i++) scheduler.Advance(SimScheduler.FixedDt);
-            al.Tick();
-            al.Tick(); // a second tick must not re-fire
+            for (int i = 0; i < 400 && !al.HasFired; i++)
+            {
+                scheduler.Advance(SimScheduler.FixedDt);
+                al.Tick();
+            }
+            al.Tick(); // further ticks must not re-fire
             al.Tick();
 
             Assert.AreEqual(1, commits);

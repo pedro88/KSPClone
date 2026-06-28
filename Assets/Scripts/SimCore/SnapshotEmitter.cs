@@ -70,7 +70,7 @@ namespace KSPClone.SimCore
 
         private double _accumulator;
         private double _secondsSinceRateLog;
-        private long _bundlesSinceRateLog;
+        private long _bundlesAtLastLog;
 
         /// <summary>
         /// Adapter the transport layer implements to receive emitted
@@ -119,12 +119,11 @@ namespace KSPClone.SimCore
             }
 
             _secondsSinceRateLog += dtSeconds;
-            _bundlesSinceRateLog = EmittedBundles;
             if (_secondsSinceRateLog >= 1.0)
             {
-                MeasuredRateHz = _bundlesSinceRateLog / _secondsSinceRateLog;
+                MeasuredRateHz = (EmittedBundles - _bundlesAtLastLog) / _secondsSinceRateLog;
+                _bundlesAtLastLog = EmittedBundles;
                 _secondsSinceRateLog = 0.0;
-                _bundlesSinceRateLog = 0;
             }
         }
 

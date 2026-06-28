@@ -60,9 +60,10 @@ namespace KSPClone.SimCore.Tests
             Assert.AreEqual(WarpState.Active, fsm.State);
             Assert.AreEqual(1000.0, world.Clock.Rate);
 
-            // Advance the scheduler by 1 s of wall-time.
+            // Advance the scheduler by 1 s of wall-time, in FixedDt chunks so the
+            // spiral-of-death clamp never trims it (a single Advance(1.0) would).
             var scheduler = new SimScheduler(world);
-            scheduler.Advance(1.0);
+            for (int i = 0; i < 60; i++) scheduler.Advance(SimScheduler.FixedDt);
 
             var endGameTime = world.Clock.GameTimeSeconds;
             Assert.AreEqual(1000.0, endGameTime - warpStartGameTime, 1e-9,

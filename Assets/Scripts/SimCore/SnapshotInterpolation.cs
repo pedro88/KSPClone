@@ -15,10 +15,12 @@ namespace KSPClone.SimCore
         public IReadOnlyList<VesselSnapshot> Snapshots => _buffer;
 
         private readonly List<VesselSnapshot> _buffer;
+        private readonly int _maxLength;
 
         public SnapshotBuffer(int maxLength = 32)
         {
             if (maxLength < 2) throw new ArgumentOutOfRangeException(nameof(maxLength));
+            _maxLength = maxLength;
             _buffer = new List<VesselSnapshot>(maxLength);
         }
 
@@ -27,7 +29,7 @@ namespace KSPClone.SimCore
             if (_buffer.Count > 0 && snapshot.GameTime < _buffer[_buffer.Count - 1].GameTime)
                 throw new ArgumentException("Snapshot must arrive in non-decreasing GameTime order.");
             _buffer.Add(snapshot);
-            if (_buffer.Count > _buffer.Capacity)
+            if (_buffer.Count > _maxLength)
                 _buffer.RemoveAt(0);
         }
 

@@ -49,7 +49,7 @@ namespace KSPClone.SimCore.Tests
             scheduler.Advance(0.25);                                  // stall #1
             for (int i = 0; i < 60; i++) scheduler.Advance(SimScheduler.FixedDt);
             scheduler.Advance(0.25);                                  // stall #2
-            var remaining = 10.0 - scheduler.TickCount * SimScheduler.FixedDt - 0.50;
+            var remaining = 10.0 - scheduler.TickCount * SimScheduler.FixedDt;
             while (remaining > 0.0)
             {
                 var dt = remaining < SimScheduler.FixedDt ? remaining : SimScheduler.FixedDt;
@@ -76,7 +76,7 @@ namespace KSPClone.SimCore.Tests
             scheduler.Advance(0.25);
             for (int i = 0; i < 60; i++) scheduler.Advance(SimScheduler.FixedDt);
             scheduler.Advance(0.25);
-            var remaining = 10.0 - scheduler.TickCount * SimScheduler.FixedDt - 0.50;
+            var remaining = 10.0 - scheduler.TickCount * SimScheduler.FixedDt;
             while (remaining > 0.0)
             {
                 var dt = remaining < SimScheduler.FixedDt ? remaining : SimScheduler.FixedDt;
@@ -100,8 +100,10 @@ namespace KSPClone.SimCore.Tests
             var ticksPerSecondLog = new List<long>();
 
             long prevTickCount = 0;
-            scheduler.Advance(0.25); // 250 ms stall in second 0 → catchup
-            scheduler.Advance(0.75); // finish second 0 at nominal rate
+            scheduler.Advance(0.25); // 250 ms stall in second 0 → catchup (15 ticks)
+            // Finish second 0 at nominal rate. Feed in FixedDt chunks: a single
+            // Advance(0.75) would trip the spiral-of-death clamp (MaxAdvanceSeconds).
+            for (int i = 0; i < 45; i++) scheduler.Advance(SimScheduler.FixedDt);
             ticksPerSecondLog.Add(scheduler.TickCount - prevTickCount);
             prevTickCount = scheduler.TickCount;
 

@@ -118,6 +118,8 @@ namespace KSPClone.SimCore.Tests
         public void Halt_FromActive_ResetsRate_AndFiresWarpEnded()
         {
             _fsm.RequestWarp(new WarpRequest(_sessions[0].Id, 100.0, WarpKind.OnRails));
+            _fsm.Approve(_sessions[1].Id);
+            _fsm.Approve(_sessions[2].Id); // unanimous → Active, so Halt has effect
             WarpRequest? seenReq = null;
             WarpStateMachine.WarpEndReason? seenReason = null;
             _fsm.WarpEnded += (r, why) => { seenReq = r; seenReason = why; };
