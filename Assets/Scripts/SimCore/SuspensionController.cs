@@ -13,7 +13,7 @@ namespace KSPClone.SimCore
     /// flags. Suspended vessels do not advance in master clock; the
     /// vessel clock captures the freeze point.
     /// </summary>
-    public sealed class VesselSnapshot
+    public sealed class SuspendedVesselState
     {
         public VesselId VesselId { get; }
         public BubbleId BubbleId { get; }
@@ -27,7 +27,7 @@ namespace KSPClone.SimCore
         public bool WasThrustActive { get; }
         public CelestialBodyId ParentBody { get; }
 
-        public VesselSnapshot(
+        public SuspendedVesselState(
             VesselId vesselId, BubbleId bubbleId, double suspendedAtMasterClock, double vesselClockAtSuspend,
             Vector3d localPosition, Vector3d localVelocity, Vector3d angularVelocity,
             Orbit orbitAtSuspend, bool wasThrustActive, CelestialBodyId parentBody)
@@ -54,18 +54,18 @@ namespace KSPClone.SimCore
     /// </summary>
     public sealed class SnapshotStore
     {
-        private readonly Dictionary<VesselId, VesselSnapshot> _byVessel = new();
+        private readonly Dictionary<VesselId, SuspendedVesselState> _byVessel = new();
 
         public int Count => _byVessel.Count;
 
-        public void Save(VesselSnapshot snapshot) => _byVessel[snapshot.VesselId] = snapshot;
+        public void Save(SuspendedVesselState snapshot) => _byVessel[snapshot.VesselId] = snapshot;
 
-        public bool TryGet(VesselId vesselId, out VesselSnapshot snapshot)
+        public bool TryGet(VesselId vesselId, out SuspendedVesselState snapshot)
             => _byVessel.TryGetValue(vesselId, out snapshot!);
 
         public bool Remove(VesselId vesselId) => _byVessel.Remove(vesselId);
 
-        public IEnumerable<VesselSnapshot> All => _byVessel.Values;
+        public IEnumerable<SuspendedVesselState> All => _byVessel.Values;
     }
 
     /// <summary>
@@ -86,8 +86,8 @@ namespace KSPClone.SimCore
     /// </summary>
     public sealed class SuspensionController
     {
-        public event Action<VesselSnapshot>? VesselSuspended;
-        public event Action<VesselSnapshot>? VesselResumed;
+        public event Action<SuspendedVesselState>? VesselSuspended;
+        public event Action<SuspendedVesselState>? VesselResumed;
 
         private readonly SimWorld _world;
         private readonly BubbleRegistry _registry;
@@ -177,7 +177,7 @@ namespace KSPClone.SimCore
                 return false;
             if (vessel.BubbleId is not { } bid) return false;
 
-            var snap = new VesselSnapshot(
+            var snap = new SuspendedVesselState(
                 vessel.Id,
                 bid,
                 suspendedAtMasterClock: _world.Clock.GameTimeSeconds,

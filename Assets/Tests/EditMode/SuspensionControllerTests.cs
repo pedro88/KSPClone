@@ -159,7 +159,7 @@ namespace KSPClone.SimCore.Tests
             vessel.ThrustActive = true;
             var (registry, _) = AttachBubble(vessel);
 
-            VesselSnapshot? captured = null;
+            SuspendedVesselState? captured = null;
             var controller = new SuspensionController(world, registry, new SnapshotStore(), new WarpSafeEvaluator());
             controller.VesselSuspended += s => captured = s;
 
