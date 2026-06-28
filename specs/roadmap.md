@@ -12,7 +12,7 @@ Ordering follows the constitution's "prove the spine first" (Art. 10): M0 is the
 
 Updated as milestones land. Detailed ticket status lives in [GitHub issues](https://github.com/pedro88/KSPClone/issues) (one issue per task).
 
-- **M0 — Skeleton (the spine):** 22/23 tickets landed. Only **T02** (Unity dedicated-server build target) remains — needs Editor. Wire transport (LiteNetLib) is deferred to a later slice that wires the already-defined wire-agnostic data structures (T12 partial / T13 / T14 / T15) to the actual UDP layer.
+- **M0 — Skeleton (the spine):** all sim + persistence logic landed and unit-tested, and the spine is now **assembled and integration-tested in-process**: `SimCore.ServerSimulation` composes the warp-vote FSM, auto-limit, POI scan, SOI re-parenting, snapshot emitter and connection registry and drives them per fixed tick; `ServerBootstrap` restores-or-seeds the world (`WorldSeed`) and runs the loop with optional Postgres write-through. `ServerSimulationTests` exercises connect → handshake → solo warp → auto-limit-at-SOI → re-parent end-to-end. Remaining for the runnable demo: **T1** (headless `-batchmode` build + `ServerBuilder`, needs Editor), a **Unity scene** hosting `ServerBootstrap`, **Postgres-verified** restart-resume (the 7 persistence tests skip without a DB on `localhost:5433`), and the **real UDP transport + rendering client** (deferred — the wire-agnostic structures exist; only the LiteNetLib/socket layer + client remain). Warp policy: **ADR-0010 amended** — bands are contiguous (≤4× physics, >4× on-rails), no rejected gap.
 - **M1 — Physics bubble + prediction:** not started.
 - **M2 — Multi-crew stations:** not started.
 - **M3 — Collaborative VAB:** not started.
