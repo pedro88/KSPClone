@@ -7,9 +7,11 @@ namespace KSPClone.SimCore.Tests
     [TestFixture]
     public sealed class FloatingOriginManagerTests
     {
-        private static Vessel MakeActive(Vector3d worldPos, BubbleId? bubbleId = null)
+        // The vessel id MUST match the id registered in the bubble, otherwise
+        // the vessel is not a member and the rebase ignores it.
+        private static Vessel MakeActive(VesselId id, Vector3d worldPos, BubbleId? bubbleId = null)
         {
-            return new Vessel(VesselId.New(),
+            return new Vessel(id,
                 new Orbit(7_000_000.0, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet))
             {
                 State = VesselState.ActivePhysics,
@@ -33,8 +35,9 @@ namespace KSPClone.SimCore.Tests
         {
             var origin = Vector3d.Zero;
             var bubble = new PhysicsBubble(BubbleId.New(), origin);
-            bubble.Add(VesselId.New());
-            var v = MakeActive(new Vector3d(500, 0, 0));
+            var id = VesselId.New();
+            bubble.Add(id);
+            var v = MakeActive(id, new Vector3d(500, 0, 0), bubble.Id);
             var mgr = new FloatingOriginManager();
 
             var shifted = mgr.RebaseIfDrifted(bubble, new List<Vessel> { v });
@@ -50,7 +53,7 @@ namespace KSPClone.SimCore.Tests
             var bubble = new PhysicsBubble(BubbleId.New(), origin);
             var id = VesselId.New();
             bubble.Add(id);
-            var v = MakeActive(new Vector3d(5000, 0, 0)); // 5 km > 1024 m
+            var v = MakeActive(id, new Vector3d(5000, 0, 0), bubble.Id); // 5 km > 1024 m
 
             var mgr = new FloatingOriginManager();
             var shifted = mgr.RebaseIfDrifted(bubble, new List<Vessel> { v });
@@ -65,10 +68,8 @@ namespace KSPClone.SimCore.Tests
             var bubble = new PhysicsBubble(BubbleId.New(), Vector3d.Zero);
             var a = VesselId.New(); bubble.Add(a);
             var b = VesselId.New(); bubble.Add(b);
-            var va = MakeActive(new Vector3d(2000, 0, 0));
-            va.BubbleId = bubble.Id;
-            var vb = MakeActive(new Vector3d(4000, 0, 0));
-            vb.BubbleId = bubble.Id;
+            var va = MakeActive(a, new Vector3d(2000, 0, 0), bubble.Id);
+            var vb = MakeActive(b, new Vector3d(4000, 0, 0), bubble.Id);
 
             var mgr = new FloatingOriginManager();
             FloatingOriginShiftedEvent? captured = null;
@@ -115,7 +116,7 @@ namespace KSPClone.SimCore.Tests
             var bubble = new PhysicsBubble(BubbleId.New(), Vector3d.Zero);
             var id = VesselId.New();
             bubble.Add(id);
-            var v = MakeActive(new Vector3d(700, 0, 0));
+            var v = MakeActive(id, new Vector3d(700, 0, 0), bubble.Id);
 
             var mgr = new FloatingOriginManager();
             mgr.RebaseToCentroid(bubble, new List<Vessel> { v });
@@ -133,9 +134,9 @@ namespace KSPClone.SimCore.Tests
             var idKeep2 = VesselId.New(); keep.Add(idKeep2);
             var idAbsorb = VesselId.New(); absorb.Add(idAbsorb);
 
-            var vKeep1 = MakeActive(new Vector3d(1e9 + 100, 0, 0), keep.Id);
-            var vKeep2 = MakeActive(new Vector3d(1e9 - 100, 0, 0), keep.Id);
-            var vAbsorb = MakeActive(new Vector3d(0, 0, 0), absorb.Id);
+            var vKeep1 = MakeActive(idKeep1, new Vector3d(1e9 + 100, 0, 0), keep.Id);
+            var vKeep2 = MakeActive(idKeep2, new Vector3d(1e9 - 100, 0, 0), keep.Id);
+            var vAbsorb = MakeActive(idAbsorb, new Vector3d(0, 0, 0), absorb.Id);
 
             var mgr = new FloatingOriginManager();
             var result = mgr.MergeInto(keep, absorb, new List<Vessel> { vKeep1, vKeep2, vAbsorb });
@@ -153,13 +154,13 @@ namespace KSPClone.SimCore.Tests
         public void MergeInto_AbsorbLargerThanKeep_SwapsRoles()
         {
             var keep = new PhysicsBubble(BubbleId.New(), new Vector3d(0, 0, 0));
-            keep.Add(VesselId.New());
+            var idKeep = VesselId.New(); keep.Add(idKeep);
             var absorb = new PhysicsBubble(BubbleId.New(), new Vector3d(100, 0, 0));
-            absorb.Add(VesselId.New());
-            absorb.Add(VesselId.New());
-            var vKeep = MakeActive(Vector3d.Zero, keep.Id);
-            var vAbsorb1 = MakeActive(new Vector3d(100, 0, 0), absorb.Id);
-            var vAbsorb2 = MakeActive(new Vector3d(120, 0, 0), absorb.Id);
+            var idA1 = VesselId.New(); absorb.Add(idA1);
+            var idA2 = VesselId.New(); absorb.Add(idA2);
+            var vKeep = MakeActive(idKeep, Vector3d.Zero, keep.Id);
+            var vAbsorb1 = MakeActive(idA1, new Vector3d(100, 0, 0), absorb.Id);
+            var vAbsorb2 = MakeActive(idA2, new Vector3d(120, 0, 0), absorb.Id);
 
             var mgr = new FloatingOriginManager();
             var result = mgr.MergeInto(keep, absorb, new List<Vessel> { vKeep, vAbsorb1, vAbsorb2 });
@@ -176,7 +177,7 @@ namespace KSPClone.SimCore.Tests
             var bubble = new PhysicsBubble(BubbleId.New(), Vector3d.Zero);
             var id = VesselId.New();
             bubble.Add(id);
-            var v = MakeActive(new Vector3d(3000, 0, 0));
+            var v = MakeActive(id, new Vector3d(3000, 0, 0), bubble.Id);
 
             var mgr = new FloatingOriginManager();
             mgr.RebaseIfDrifted(bubble, new List<Vessel> { v });
@@ -189,8 +190,9 @@ namespace KSPClone.SimCore.Tests
         public void CustomThreshold_Honoured()
         {
             var bubble = new PhysicsBubble(BubbleId.New(), Vector3d.Zero);
-            bubble.Add(VesselId.New());
-            var v = MakeActive(new Vector3d(500, 0, 0));
+            var id = VesselId.New();
+            bubble.Add(id);
+            var v = MakeActive(id, new Vector3d(500, 0, 0), bubble.Id);
 
             // Tight threshold (200 m) — 500 m should trigger a rebase.
             var mgr = new FloatingOriginManager(200.0);

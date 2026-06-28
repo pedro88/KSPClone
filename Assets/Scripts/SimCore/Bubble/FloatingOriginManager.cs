@@ -123,7 +123,8 @@ namespace KSPClone.SimCore
 
             var moved = new List<VesselId>();
             var newOrigin = keep.GlobalOrigin;
-            foreach (var id in absorb.Members)
+            // Snapshot absorb's members: we mutate absorb (Remove) while moving.
+            foreach (var id in new List<VesselId>(absorb.Members))
             {
                 var v = FindVessel(activeVessels, id);
                 if (v is null || !v.CachedWorldPosition.HasValue) continue;
@@ -132,6 +133,7 @@ namespace KSPClone.SimCore
                 v.CachedLocalPosition = newLocal;
                 v.CachedLocalVelocity = v.CachedWorldVelocity;
                 v.BubbleId = keep.Id;
+                absorb.Remove(id);
                 keep.Add(id);
                 moved.Add(id);
                 OriginShifted?.Invoke(new FloatingOriginShiftedEvent(keep.Id, newLocal, new[] { id }));

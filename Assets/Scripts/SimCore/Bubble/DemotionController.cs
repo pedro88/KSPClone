@@ -89,6 +89,8 @@ namespace KSPClone.SimCore
                 if (TryDemote(vessel, bid, DemotionReason.UnattendedWarpSafe))
                     demoted.Add(vessel.Id);
             }
+            // Sweep any bubble that lost its last member this pass (ADR-0012 §2).
+            _registry.CollectEmpty();
             return demoted;
         }
 

@@ -95,24 +95,24 @@ namespace KSPClone.SimCore
             var candidates = GatherCandidates(activeVessels);
             var clusters = Cluster(candidates);
 
-            // 1. Track every vessel that was active last tick so we can emit Left events.
-            var previousActive = new Dictionary<VesselId, (BubbleId bubbleId, Vessel vessel)>();
+            // 1. Snapshot every current bubble member so we can drop the ones no
+            //    longer claimed by a cluster this tick — including vessels that
+            //    vanished from the input entirely (demoted / suspended / removed).
+            var previousMembers = new Dictionary<VesselId, BubbleId>();
             foreach (var bubble in _registry.All)
                 foreach (var vid in bubble.Members)
-                {
-                    if (FindVessel(activeVessels, vid) is { } v)
-                        previousActive[vid] = (bubble.Id, v);
-                }
+                    previousMembers[vid] = bubble.Id;
 
             // 2. For each cluster, resolve the bubble id (reuse or create) and assign members.
             var survivors = new HashSet<BubbleId>();
             foreach (var cluster in clusters)
             {
-                var bubble = ResolveBubbleForCluster(cluster);
+                var bubble = ResolveBubbleForCluster(cluster, survivors);
                 foreach (var vessel in cluster.Vessels)
                 {
-                    // If the vessel already lived in another bubble (cluster spans multiple bubbles),
-                    // remove it from that one before adding to the new one. Single-bubble case is a no-op.
+                    // If the vessel already lived in another bubble (cluster spans multiple bubbles,
+                    // or its old bubble was already claimed by another cluster this tick — a split),
+                    // remove it from that one before adding to the new one.
                     if (vessel.BubbleId is { } oldBid && !oldBid.Equals(bubble.Id)
                         && _registry.TryGet(oldBid, out var oldBubble) && oldBubble.Remove(vessel.Id))
                     {
@@ -126,21 +126,19 @@ namespace KSPClone.SimCore
                         VesselJoinedBubble?.Invoke(new BubbleMembershipChange(bubble.Id, vessel.Id,
                             cluster.WasExisting ? BubbleMembershipChangeKind.Joined : BubbleMembershipChangeKind.Formed));
                     }
-                    previousActive.Remove(vessel.Id);
+                    previousMembers.Remove(vessel.Id);
                 }
                 survivors.Add(bubble.Id);
             }
 
-            // 3. Anything left in previousActive is no longer in any cluster: emit Left and clear.
-            foreach (var entry in previousActive.Values)
+            // 3. Members not claimed by any cluster this tick (drifted out, demoted,
+            //    suspended, or otherwise gone) leave their bubble.
+            foreach (var kv in previousMembers)
             {
-                if (_registry.TryGet(entry.bubbleId, out var oldBubble))
+                if (_registry.TryGet(kv.Value, out var oldBubble) && oldBubble.Remove(kv.Key))
                 {
-                    if (oldBubble.Remove(entry.vessel.Id))
-                    {
-                        entry.vessel.BubbleId = null;
-                        VesselLeftBubble?.Invoke(new BubbleMembershipChange(entry.bubbleId, entry.vessel.Id, BubbleMembershipChangeKind.Left));
-                    }
+                    if (FindVessel(activeVessels, kv.Key) is { } vv) vv.BubbleId = null;
+                    VesselLeftBubble?.Invoke(new BubbleMembershipChange(kv.Value, kv.Key, BubbleMembershipChangeKind.Left));
                 }
             }
 
@@ -223,7 +221,7 @@ namespace KSPClone.SimCore
             return dx * dx + dy * dy + dz * dz <= PhysicsRangeRadiusSquared;
         }
 
-        private PhysicsBubble ResolveBubbleForCluster(VesselCluster cluster)
+        private PhysicsBubble ResolveBubbleForCluster(VesselCluster cluster, HashSet<BubbleId> claimedThisTick)
         {
             // Did every member already share one bubble id?
             BubbleId? shared = null;
@@ -234,8 +232,11 @@ namespace KSPClone.SimCore
                 else if (!shared.Value.Equals(bid)) { shared = null; break; }
             }
 
-            // (a) Whole cluster already shared one bubble → reuse it.
-            if (shared is { } existing && _registry.TryGet(existing, out var bubble))
+            // (a) Whole cluster already shared one bubble AND no other cluster has
+            // already claimed it this tick → reuse it. If another cluster took it
+            // (the bubble split into two), this cluster falls through to a fresh one.
+            if (shared is { } existing && !claimedThisTick.Contains(existing)
+                && _registry.TryGet(existing, out var bubble))
             {
                 cluster.WasExisting = true;
                 return bubble;

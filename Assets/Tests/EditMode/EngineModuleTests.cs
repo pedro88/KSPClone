@@ -65,8 +65,10 @@ namespace KSPClone.SimCore.Tests
 
             var finalMass = massReg.Get(vesselId)!.MassKg;
             var burnedMass = initialMass - finalMass;
-            Assert.AreEqual(0.0, engines.EnginesFor(vesselId)![0].PropellantMassKg, 1.0,
-                "Propellant should be exhausted after 100 s burn.");
+            // ~1699 kg burned from a 5000 kg tank → ~3301 kg remain. The
+            // propellant drawn must equal the vessel mass lost.
+            Assert.AreEqual(5_000.0 - burnedMass, engines.EnginesFor(vesselId)![0].PropellantMassKg, 1e-6,
+                "Propellant consumed must equal the vessel mass burned.");
             Assert.Greater(burnedMass, 1500.0, "Burned mass should be ~1700 kg.");
             Assert.Less(burnedMass, 1900.0);
 

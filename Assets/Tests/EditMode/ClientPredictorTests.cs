@@ -40,8 +40,11 @@ namespace KSPClone.SimCore.Tests
             var pre = predictor.Reconcile(authState, ackedClientTick: 1L);
 
             Assert.AreEqual(preReplay.Position.X, pre.Position.X, 1e-9);
-            // Post-replay: one input (tick 2) replayed from the authoritative state.
-            Assert.AreEqual(authState.Position.X + (step.ThrustAccelerationPerThrottleUnit * step.FixedDt) * step.FixedDt,
+            // Post-replay: tick 2 replayed from the authoritative state, which already
+            // carries tick 1's velocity. Semi-implicit Euler:
+            //   newVel = authState.Vel + a·dt ; newPos = authState.Pos + newVel·dt
+            var replayVel = authState.Velocity.X + step.ThrustAccelerationPerThrottleUnit * step.FixedDt;
+            Assert.AreEqual(authState.Position.X + replayVel * step.FixedDt,
                             predictor.State.Position.X, 1e-9);
         }
 

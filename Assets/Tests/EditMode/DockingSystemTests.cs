@@ -178,8 +178,9 @@ namespace KSPClone.SimCore.Tests
             Assert.AreEqual(3000.0, captured.Value.CombinedMassKg, 1e-9);
             // v_combined = (m_a·v_a + m_b·v_b) / (m_a + m_b) = (1000·10 + 2000·-5)/3000 = 0
             Assert.AreEqual(0.0, captured.Value.CombinedVelocity.X, 1e-9);
-            Assert.IsFalse(world.Vessels.ContainsKey(b.Id));
-            Assert.IsTrue(world.Vessels.ContainsKey(a.Id));
+            // b is heavier (2000 ≥ 1000) → b survives, lighter a is absorbed.
+            Assert.IsFalse(world.Vessels.ContainsKey(a.Id), "lighter vessel a is absorbed");
+            Assert.IsTrue(world.Vessels.ContainsKey(b.Id), "heavier vessel b survives");
         }
 
         [Test]
