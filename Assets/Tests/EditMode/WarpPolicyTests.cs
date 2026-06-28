@@ -14,14 +14,16 @@ namespace KSPClone.SimCore.Tests
         }
 
         [Test]
-        public void ClassifyMultiplier_LowIsPhysics_HighIsOnRails_MiddleRejected()
+        public void ClassifyMultiplier_LowIsPhysics_AboveCeilingIsOnRails_NoGap()
         {
             Assert.AreEqual(WarpKind.Physics, WarpPolicy.ClassifyMultiplier(2.0));
             Assert.AreEqual(WarpKind.Physics, WarpPolicy.ClassifyMultiplier(WarpPolicy.PhysicsWarpMaxMultiplier));
-            Assert.AreEqual(WarpKind.OnRails, WarpPolicy.ClassifyMultiplier(WarpPolicy.OnRailsWarpMinMultiplier));
+            // Just above the physics ceiling is on-rails — the bands are
+            // contiguous, no rejected middle band (ADR-0010, amended).
+            Assert.AreEqual(WarpKind.OnRails, WarpPolicy.ClassifyMultiplier(10.0));
+            Assert.AreEqual(WarpKind.OnRails, WarpPolicy.ClassifyMultiplier(500.0));
             Assert.AreEqual(WarpKind.OnRails, WarpPolicy.ClassifyMultiplier(100_000.0));
-            Assert.Throws<System.ArgumentOutOfRangeException>(() => WarpPolicy.ClassifyMultiplier(10.0));
-            Assert.Throws<System.ArgumentOutOfRangeException>(() => WarpPolicy.ClassifyMultiplier(500.0));
+            // 1× or slower is not a warp.
             Assert.Throws<System.ArgumentOutOfRangeException>(() => WarpPolicy.ClassifyMultiplier(1.0));
         }
 

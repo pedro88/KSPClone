@@ -41,7 +41,7 @@ Even after a warp vote passes, the server clamps the warp's actual end-time to t
 Low-multiplier warp (≤ x4) where the physics simulation still runs each step. Used in atmosphere or near docking.
 
 **On-rails warp**:
-High-multiplier warp (≥ x1000) where vessels stop being physically simulated and follow analytic (Keplerian) orbits.
+Warp above the physics ceiling (> x4) where vessels stop being physically simulated and follow analytic (Keplerian) orbits. Contiguous with physics warp — no rejected middle range (ADR-0010).
 _Avoid_: time warp (ambiguous — say which kind)
 
 ## Orbital model

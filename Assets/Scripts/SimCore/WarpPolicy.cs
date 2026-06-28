@@ -5,25 +5,22 @@ namespace KSPClone.SimCore
 {
     /// <summary>
     /// Centralised policy for warp-kind selection and warp-safety checks
-    /// (TIME-7). The threshold values are intentionally simple — see
-    /// the M0 ticket for the rationale; physics warp keeps active
-    /// physics stepping (low multiplier, ≤ 4×); on-rails warp is the
-    /// high-multiplier analytic-only mode (≥ 1000×). Anything in
-    /// between is rejected so we never silently drop frames.
+    /// (TIME-7). The single threshold is the physics ceiling: at or below
+    /// <see cref="PhysicsWarpMaxMultiplier"/> physics keeps stepping
+    /// (bounded by the 60 Hz integrator); above it, warp is on-rails
+    /// (analytic conics, cost-independent of the multiplier, so any rate
+    /// goes). The bands are contiguous — there is no rejected gap
+    /// (ADR-0010, amended).
     /// </summary>
     public static class WarpPolicy
     {
         public const double PhysicsWarpMaxMultiplier = 4.0;
-        public const double OnRailsWarpMinMultiplier = 1000.0;
 
         public static WarpKind ClassifyMultiplier(double multiplier)
         {
             if (multiplier <= 1.0)
                 throw new ArgumentOutOfRangeException(nameof(multiplier), "Multiplier must be > 1 to be a warp.");
-            if (multiplier <= PhysicsWarpMaxMultiplier) return WarpKind.Physics;
-            if (multiplier >= OnRailsWarpMinMultiplier) return WarpKind.OnRails;
-            throw new ArgumentOutOfRangeException(nameof(multiplier),
-                $"Multiplier {multiplier} is in the unsupported gap (1, {PhysicsWarpMaxMultiplier}] .. [{OnRailsWarpMinMultiplier}, ∞).");
+            return multiplier <= PhysicsWarpMaxMultiplier ? WarpKind.Physics : WarpKind.OnRails;
         }
 
         /// <summary>

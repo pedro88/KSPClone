@@ -83,10 +83,10 @@ namespace KSPClone.SimCore.Tests
             // Drop two of the three so we are solo.
             _conns.Remove(_sessions[1].Id);
             _conns.Remove(_sessions[2].Id);
-            var req = new WarpRequest(_sessions[0].Id, 10.0, WarpKind.Physics);
+            var req = new WarpRequest(_sessions[0].Id, 4.0, WarpKind.Physics);
             Assert.IsTrue(_fsm.RequestWarp(req));
             Assert.AreEqual(WarpState.Active, _fsm.State);
-            Assert.AreEqual(10.0, _clock.Rate);
+            Assert.AreEqual(4.0, _clock.Rate);
         }
 
         [Test]
@@ -109,9 +109,9 @@ namespace KSPClone.SimCore.Tests
         [Test]
         public void RequestWarp_WhileActive_IsRejected()
         {
-            _fsm.RequestWarp(new WarpRequest(_sessions[0].Id, 5.0, WarpKind.Physics));
-            Assert.IsFalse(_fsm.RequestWarp(new WarpRequest(_sessions[0].Id, 10.0, WarpKind.Physics)),
-                "Warp cannot be re-requested while one is already Active.");
+            _fsm.RequestWarp(new WarpRequest(_sessions[0].Id, 3.0, WarpKind.Physics));
+            Assert.IsFalse(_fsm.RequestWarp(new WarpRequest(_sessions[0].Id, 4.0, WarpKind.Physics)),
+                "Warp cannot be re-requested while one is already in progress.");
         }
 
         [Test]
@@ -162,6 +162,38 @@ namespace KSPClone.SimCore.Tests
             CollectionAssert.AreEqual(
                 new[] { WarpState.Voting, WarpState.Active, WarpState.Idle },
                 seen);
+        }
+
+        [Test]
+        public void RequestWarp_RejectsKindMismatchedMultiplier()
+        {
+            // Physics faster than the 4× ceiling is impossible (ADR-0010): the
+            // multiplier classifies as OnRails, contradicting the declared kind.
+            Assert.IsFalse(_fsm.RequestWarp(new WarpRequest(_sessions[0].Id, 100.0, WarpKind.Physics)));
+            Assert.AreEqual(WarpState.Idle, _fsm.State);
+        }
+
+        [Test]
+        public void OnRailsWarp_Refused_WhenNotWarpSafe()
+        {
+            var conns = new ConnectionRegistry();
+            var solo = conns.AddNew();
+            var fsm = new WarpStateMachine(new MasterClock(), conns, onRailsWarpSafe: () => false);
+
+            Assert.IsFalse(fsm.RequestWarp(new WarpRequest(solo.Id, 1000.0, WarpKind.OnRails)),
+                "OnRails warp must be refused while a vessel is not warp-safe (TIME-7).");
+            Assert.AreEqual(WarpState.Idle, fsm.State);
+        }
+
+        [Test]
+        public void OnRailsWarp_Allowed_WhenWarpSafe()
+        {
+            var conns = new ConnectionRegistry();
+            var solo = conns.AddNew();
+            var fsm = new WarpStateMachine(new MasterClock(), conns, onRailsWarpSafe: () => true);
+
+            Assert.IsTrue(fsm.RequestWarp(new WarpRequest(solo.Id, 1000.0, WarpKind.OnRails)));
+            Assert.AreEqual(WarpState.Active, fsm.State);
         }
     }
 }

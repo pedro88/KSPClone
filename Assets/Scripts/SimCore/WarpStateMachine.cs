@@ -123,11 +123,18 @@ namespace KSPClone.SimCore
 
         private readonly MasterClock _clock;
         private readonly ConnectionRegistry _connections;
+        private readonly Func<bool>? _onRailsWarpSafe;
 
-        public WarpStateMachine(MasterClock clock, ConnectionRegistry connections)
+        /// <param name="onRailsWarpSafe">
+        /// Optional predicate the host supplies to gate OnRails warp on every
+        /// in-scope vessel being warp-safe (TIME-7). Null = always safe — the
+        /// M0 default, where all vessels are on-rails anyway.
+        /// </param>
+        public WarpStateMachine(MasterClock clock, ConnectionRegistry connections, Func<bool>? onRailsWarpSafe = null)
         {
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _connections = connections ?? throw new ArgumentNullException(nameof(connections));
+            _onRailsWarpSafe = onRailsWarpSafe;
         }
 
         /// <summary>
@@ -140,6 +147,13 @@ namespace KSPClone.SimCore
             if (State != WarpState.Idle) return false;
             if (request.Multiplier <= 1.0) return false;
             if (!_connections.Contains(request.Requester)) return false;
+            // The multiplier determines the kind (ADR-0010, amended: no gap —
+            // ≤4× is Physics, >4× is OnRails). Reject a request whose declared
+            // kind contradicts its multiplier (e.g. Physics faster than 4×).
+            if (WarpPolicy.ClassifyMultiplier(request.Multiplier) != request.Kind) return false;
+            // OnRails requires every in-scope vessel to be warp-safe; the host
+            // supplies the predicate (no-op in M0 — all vessels are on-rails).
+            if (request.Kind == WarpKind.OnRails && _onRailsWarpSafe is not null && !_onRailsWarpSafe()) return false;
 
             Vote.Open(_connections.All.Select(s => s.Id));
             Vote.Approve(request.Requester);
