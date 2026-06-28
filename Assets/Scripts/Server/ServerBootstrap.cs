@@ -28,6 +28,17 @@ namespace KSPClone.Server
 
         private void Awake()
         {
+            // Headless dedicated server: keep ticking unfocused and don't throttle
+            // the host loop to a (non-existent) display. The sim cadence is the
+            // fixed-step accumulator (Art. 2), so a 60 fps host loop is plenty.
+            Application.runInBackground = true;
+            if (Application.isBatchMode)
+            {
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = 60;
+                Debug.Log("[server] batchmode: headless dedicated server (no renderer)");
+            }
+
             var bodies = WorldSeed.CreateBodies();
             var world = RestoreOrSeed(bodies);
             Sim = new ServerSimulation(world);
