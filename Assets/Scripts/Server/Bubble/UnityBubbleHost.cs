@@ -46,6 +46,11 @@ namespace KSPClone.Server
             return null;
         }
 
+        public Scene? TryGetScene(BubbleId bubbleId)
+        {
+            return _bubbleScenes.TryGetValue(bubbleId, out var scene) ? scene : (Scene?)null;
+        }
+
         private void OnBubbleCreated(PhysicsBubble bubble)
         {
             if (_disposed) return;

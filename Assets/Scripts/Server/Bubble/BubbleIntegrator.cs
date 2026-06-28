@@ -1,5 +1,6 @@
 #nullable enable annotations
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using KSPClone.SimCore;
@@ -92,14 +93,14 @@ namespace KSPClone.Server
 
             // (2) Step the bubble's physics scene independently of Unity's
             // automatic simulation (SimulationMode.Script + Physics.Simulate).
-            scene.Simulate(FixedDt);
+            scene.Simulate((float)FixedDt);
 
             // (3) Post-step: read transforms back into authoritative doubles.
             foreach (var rb in _scratch)
             {
                 if (!_world.Vessels.TryGetValue(rb.VesselId, out var vessel)) continue;
                 var local = rb.Body.position;
-                var localVel = rb.Body.velocity;
+                var localVel = rb.Body.linearVelocity;
                 var worldPos = bubble.GlobalOrigin + ToVector3d(local);
                 var worldVel = ToVector3d(localVel);
                 vessel.CachedLocalPosition = ToVector3d(local);
@@ -219,7 +220,7 @@ namespace KSPClone.Server
         private void CollectRigidBodies(PhysicsBubble bubble, List<RigidVesselBody> output)
         {
             output.Clear();
-            var sceneOpt = _host.TryGetPhysicsScene(bubble.Id);
+            var sceneOpt = _host.TryGetScene(bubble.Id);
             if (!sceneOpt.HasValue) return;
             foreach (var root in sceneOpt.Value.GetRootGameObjects())
             {
