@@ -158,6 +158,7 @@ namespace KSPClone.Server
             foreach (var rb in bodies)
             {
                 if (!_world.Vessels.TryGetValue(rb.VesselId, out var vessel)) continue;
+                ApplyAttitude(rb, vessel);
                 var engines = _engines.EnginesFor(vessel.Id);
                 if (engines is null || engines.Count == 0)
                 {
@@ -191,6 +192,28 @@ namespace KSPClone.Server
                 var mass = _masses.Get(vessel.Id);
                 if (mass is not null) rb.Body.mass = (float)Math.Max(mass.MassKg, 1.0);
             }
+        }
+
+        private void ApplyAttitude(RigidVesselBody rb, Vessel vessel)
+        {
+            // M1 attitude: a small torque from the pilot's (pitch, yaw,
+            // roll) rate command, scaled by inertia. Realistic reaction
+            // wheels / RCS torque modelling lands with the propulsion
+            // system in a later slice.
+            var rate = vessel.AttitudeCommand;
+            if (rate.LengthSquared <= 0.0) return;
+            var mass = _masses.Get(vessel.Id);
+            if (mass is null) return;
+            // Convert (pitch, yaw, roll) rates to a torque vector in
+            // vessel-local axes: pitch = X, yaw = Y, roll = Z.
+            var torqueLocal = ToUnity(new Vector3d(rate.X, rate.Y, rate.Z));
+            // Multiply by inertia magnitudes to get Newton-metres.
+            torqueLocal = new Vector3(
+                torqueLocal.x * (float)mass.InertiaPrincipalX,
+                torqueLocal.y * (float)mass.InertiaPrincipalY,
+                torqueLocal.z * (float)mass.InertiaPrincipalZ);
+            var torqueWorld = rb.transform.TransformDirection(torqueLocal);
+            rb.Body.AddTorque(torqueWorld, ForceMode.Force);
         }
 
         private void CollectRigidBodies(PhysicsBubble bubble, List<RigidVesselBody> output)

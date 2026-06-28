@@ -120,6 +120,36 @@ namespace KSPClone.Net
             return new ClientCommand(type, multiplier, kind);
         }
 
+        // ---- client → server: pilot input (M1-T08) ----
+
+        public static byte[] EncodePilotInput(PilotInputMessage input)
+        {
+            using var ms = new MemoryStream();
+            using var w = new BinaryWriter(ms);
+            w.Write((byte)MessageType.PilotInput);
+            WriteVesselId(w, input.VesselId);
+            w.Write(input.ClientTick);
+            w.Write(input.Throttle);
+            w.Write(input.PitchRate);
+            w.Write(input.YawRate);
+            w.Write(input.RollRate);
+            return ms.ToArray();
+        }
+
+        public static PilotInputMessage DecodePilotInput(byte[] payload)
+        {
+            using var ms = new MemoryStream(payload);
+            using var r = new BinaryReader(ms);
+            r.ReadByte(); // type tag
+            var id = ReadVesselId(r);
+            var tick = r.ReadInt64();
+            var throttle = r.ReadDouble();
+            var pitch = r.ReadDouble();
+            var yaw = r.ReadDouble();
+            var roll = r.ReadDouble();
+            return new PilotInputMessage(id, tick, throttle, pitch, yaw, roll);
+        }
+
         // ---- primitives ----
 
         private static void WriteVesselId(BinaryWriter w, VesselId id) => w.Write(id.Value.ToByteArray());
@@ -164,5 +194,6 @@ namespace KSPClone.Net
         Handshake = 1,
         Snapshot = 2,
         ClientCommand = 3,
+        PilotInput = 4,
     }
 }

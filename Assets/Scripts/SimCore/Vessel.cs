@@ -55,6 +55,14 @@ namespace KSPClone.SimCore
         public double ThrottleCommand { get; set; }
 
         /// <summary>
+        /// Pilot attitude command as a (pitch, yaw, roll) rate triple
+        /// in radians per second. Written by the input channel; read by
+        /// the integrator and applied as torque on the rigidbody
+        /// (M1-T08, Slice 1.2).
+        /// </summary>
+        public Vector3d AttitudeCommand { get; set; }
+
+        /// <summary>
         /// True iff the vessel is propagated analytically (no bubble, no
         /// rigid body). Backwards-compatible read of
         /// <see cref="State"/>; kept as a property so every existing
