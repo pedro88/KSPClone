@@ -1,0 +1,29 @@
+# Local Postgres for KSPClone persistence (ADR-0007).
+#   docker compose up -d      # start (port 5433)
+#   docker compose down       # stop  (keeps data in the named volume)
+#   docker compose down -v    # stop + wipe data
+#
+# Matches the connection used by the EditMode/Python persistence tests and
+# ServerBootstrap: host localhost, port 5433, user/password greenu.
+# Two databases: `greenu` (server runtime) and `greenu_test` (tests).
+services:
+  postgres:
+    image: postgres:16
+    container_name: kspclone-postgres
+    environment:
+      POSTGRES_USER: greenu
+      POSTGRES_PASSWORD: greenu
+      POSTGRES_DB: greenu
+    ports:
+      - "5433:5432"
+    volumes:
+      - kspclone-pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U greenu -d greenu"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  kspclone-pgdata:
