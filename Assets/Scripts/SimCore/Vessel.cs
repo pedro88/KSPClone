@@ -48,6 +48,13 @@ namespace KSPClone.SimCore
         public bool ThrustActive { get; set; }
 
         /// <summary>
+        /// Pilot-throttle command in [0..1]. Written by the input channel
+        /// (M1-T08) from the pilot's client; read by the integrator each
+        /// tick to drive engine force and propellant consumption.
+        /// </summary>
+        public double ThrottleCommand { get; set; }
+
+        /// <summary>
         /// True iff the vessel is propagated analytically (no bubble, no
         /// rigid body). Backwards-compatible read of
         /// <see cref="State"/>; kept as a property so every existing

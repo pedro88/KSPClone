@@ -39,6 +39,8 @@ namespace KSPClone.Server
         private readonly UnityBubbleHost _host;
         private readonly FloatingOriginManager _floatingOrigin;
         private readonly SimWorld _world;
+        private readonly VesselEngineRegistry _engines;
+        private readonly VesselMassRegistry _masses;
         private readonly List<RigidVesselBody> _scratch = new();
 
         public BubbleIntegrator(
@@ -46,12 +48,16 @@ namespace KSPClone.Server
             BubbleRegistry registry,
             UnityBubbleHost host,
             FloatingOriginManager floatingOrigin,
+            VesselEngineRegistry engines,
+            VesselMassRegistry masses,
             double fixedDt = 1.0 / 60.0)
         {
             _world = world;
             _registry = registry;
             _host = host;
             _floatingOrigin = floatingOrigin;
+            _engines = engines;
+            _masses = masses;
             FixedDt = fixedDt;
         }
 
@@ -82,6 +88,7 @@ namespace KSPClone.Server
             //     doubles — never in floats (ADR-0012 §6).
             CollectRigidBodies(bubble, _scratch);
             ApplyGravity(bubble, _scratch);
+            ApplyThrust(bubble, _scratch);
 
             // (2) Step the bubble's physics scene independently of Unity's
             // automatic simulation (SimulationMode.Script + Physics.Simulate).
@@ -138,6 +145,51 @@ namespace KSPClone.Server
                 var a = GravityModel.Acceleration(vesselLocalPos, parentLocalPos, parentBody.GravParameterMu);
                 var f = ToUnity(a) * (float)rb.Body.mass;
                 rb.Body.AddForce(f, ForceMode.Force);
+            }
+        }
+
+        private void ApplyThrust(PhysicsBubble bubble, List<RigidVesselBody> bodies)
+        {
+            // Thrust is applied in vessel-local space (the engine's
+            // ThrustDirectionLocal is a unit vector in the vessel's
+            // body frame). For M1 we approximate the vessel frame by
+            // the rigidbody's transform.up; this is correct for
+            // untumbled craft and degrades gracefully under rotation.
+            foreach (var rb in bodies)
+            {
+                if (!_world.Vessels.TryGetValue(rb.VesselId, out var vessel)) continue;
+                var engines = _engines.EnginesFor(vessel.Id);
+                if (engines is null || engines.Count == 0)
+                {
+                    vessel.ThrustActive = false;
+                    continue;
+                }
+                var throttle = vessel.ThrottleCommand;
+                if (throttle <= 0.0)
+                {
+                    vessel.ThrustActive = false;
+                    continue;
+                }
+
+                bool anyFiring = false;
+                foreach (var e in engines)
+                {
+                    var fMag = e.EffectiveThrust(throttle);
+                    if (fMag <= 0.0) continue;
+                    anyFiring = true;
+                    // Convert engine-local thrust direction to world
+                    // (the rigidbody transform defines the vessel frame).
+                    var dirWorld = rb.transform.TransformDirection(ToUnity(e.ThrustDirectionLocal));
+                    var force = dirWorld * (float)fMag;
+                    var mountWorld = rb.Body.position + rb.transform.TransformDirection(ToUnity(e.MountLocalPosition));
+                    rb.Body.AddForceAtPosition(force, mountWorld, ForceMode.Force);
+                }
+                vessel.ThrustActive = anyFiring;
+
+                // Propellant accounting + Δv bookkeeping.
+                _engines.ConsumePropellant(vessel.Id, throttle, FixedDt, _masses);
+                var mass = _masses.Get(vessel.Id);
+                if (mass is not null) rb.Body.mass = (float)Math.Max(mass.MassKg, 1.0);
             }
         }
 
