@@ -15,7 +15,7 @@ namespace KSPClone.SimCore.Tests
 
             predictor.SubmitInput(new PilotInputMessage(v, 1L, 1.0, 0, 0, 0));
 
-            Assert.AreEqual(1, predictor.PendingInputs.Count);
+            Assert.AreEqual(1, predictor.PendingCount);
             Assert.AreNotEqual(Vector3d.Zero, predictor.State.Position);
             Assert.AreEqual(1L, predictor.State.LastProcessedClientTick);
         }
@@ -57,7 +57,7 @@ namespace KSPClone.SimCore.Tests
 
             predictor.DiscardAcked(10L);
 
-            Assert.AreEqual(1, predictor.PendingInputs.Count);
+            Assert.AreEqual(1, predictor.PendingCount);
         }
 
         [Test]
@@ -70,8 +70,8 @@ namespace KSPClone.SimCore.Tests
             for (int t = 1; t <= 5; t++)
                 predictor.SubmitInput(new PilotInputMessage(v, t, 1.0, 0, 0, 0));
 
-            Assert.AreEqual(2, predictor.PendingInputs.Count);
-            Assert.AreEqual(4L, predictor.PendingInputs.Peek().ClientTick);
+            Assert.AreEqual(2, predictor.PendingCount);
+            Assert.AreEqual(4L, predictor.OldestPending!.Value.ClientTick);
         }
 
         [Test]

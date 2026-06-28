@@ -50,7 +50,9 @@ namespace KSPClone.SimCore
     {
         public VesselId ControlledVesselId { get; }
         public PredictedVesselState State => _state;
-        public IReadOnlyQueue<PilotInputMessage> PendingInputs => _pending;
+        public int PendingCount => _pending.Count;
+        /// <summary>Oldest unacked input, or null if the buffer is empty.</summary>
+        public PilotInputMessage? OldestPending => _pending.Count > 0 ? _pending.Peek() : (PilotInputMessage?)null;
         public int MaxBufferedInputs { get; }
 
         public event Action<PredictedVesselState>? StatePredicted;
