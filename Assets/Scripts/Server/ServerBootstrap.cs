@@ -26,6 +26,11 @@ namespace KSPClone.Server
         private LiteNetLibServerTransport _transport;
         private ServerNetHost _host;
 
+        // Active-physics Unity column (M1-T21, ADR-0014 §1, ADR-0012).
+        private UnityBubbleHost _bubbleHost;
+        private BubbleIntegrator _integrator;
+        private ServerVesselBodies _vesselBodies;
+
         private void Awake()
         {
             // Headless dedicated server: keep ticking unfocused and don't throttle
@@ -42,6 +47,7 @@ namespace KSPClone.Server
             var bodies = WorldSeed.CreateBodies();
             var world = RestoreOrSeed(bodies);
             Sim = new ServerSimulation(world);
+            WireActivePhysics();
             WirePersistence();
 
             _transport = new LiteNetLibServerTransport();
@@ -61,7 +67,25 @@ namespace KSPClone.Server
 
         private void OnDestroy()
         {
+            _vesselBodies?.Dispose();
+            _bubbleHost?.Dispose();
             _transport?.Dispose();
+        }
+
+        // Stand up the active-physics column: seed the demo craft's mass/engines,
+        // allocate a PhysicsScene per bubble, and inject the PhysX integrator as
+        // the simulation's IBubbleStepper (ADR-0014 §1).
+        private void WireActivePhysics()
+        {
+            Sim.Masses.Set(WorldSeed.SeedVesselId, WorldSeed.CreateMass());
+            Sim.Engines.Set(WorldSeed.SeedVesselId, WorldSeed.CreateEngines());
+
+            _bubbleHost = new UnityBubbleHost(Sim.Bubbles);
+            var floatingOrigin = new FloatingOriginManager();
+            _integrator = new BubbleIntegrator(
+                Sim.World, Sim.Bubbles, _bubbleHost, floatingOrigin, Sim.Engines, Sim.Masses);
+            Sim.SetBubbleStepper(new BubbleIntegratorStepper(_integrator));
+            _vesselBodies = new ServerVesselBodies(Sim, _bubbleHost);
         }
 
         private SimWorld RestoreOrSeed(BodyRegistry bodies)

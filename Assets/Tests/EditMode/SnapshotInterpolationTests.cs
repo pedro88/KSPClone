@@ -60,6 +60,19 @@ namespace KSPClone.SimCore.Tests
         }
 
         [Test]
+        public void SampleState_AtMidpoint_InterpolatesVelocityToo()
+        {
+            // M1-T13: interpolate transform AND velocity between brackets.
+            var interp = new VesselInterpolator { InterpolationDelay = 0.0 };
+            interp.OnSnapshot(new VesselSnapshot(default, 0.0, 1, new Vector3d(0, 0, 0), new Vector3d(100, 0, 0)));
+            interp.OnSnapshot(new VesselSnapshot(default, 1.0, 2, new Vector3d(10, 0, 0), new Vector3d(200, 0, 0)));
+
+            var state = interp.SampleState(0.5);
+            Assert.AreEqual(5.0, state.Position.X, 1e-12, "Position lerps to the midpoint.");
+            Assert.AreEqual(150.0, state.Velocity.X, 1e-12, "Velocity lerps between the bracketing snapshots.");
+        }
+
+        [Test]
         public void Sample_BeforeAnySnapshot_ReturnsZero()
         {
             var interp = new VesselInterpolator();

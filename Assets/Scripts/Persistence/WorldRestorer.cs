@@ -64,7 +64,7 @@ namespace KSPClone.Persistence
                 var vessel = new Vessel(id, orbit)
                 {
                     VesselClockSeconds = vesselClock,
-                    OnRails = onRails,
+                    State = onRails ? VesselState.OnRails : VesselState.ActivePhysics,
                 };
                 world.RegisterVessel(vessel);
             }

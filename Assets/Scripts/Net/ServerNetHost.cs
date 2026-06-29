@@ -47,10 +47,22 @@ namespace KSPClone.Net
 
         private void OnReceived(int peerId, byte[] data)
         {
-            if (WireCodec.PeekType(data) != MessageType.ClientCommand) return;
             if (!_peerToPlayer.TryGetValue(peerId, out var pid)) return;
 
-            var cmd = WireCodec.DecodeClientCommand(data);
+            switch (WireCodec.PeekType(data))
+            {
+                case MessageType.ClientCommand:
+                    DispatchCommand(pid, WireCodec.DecodeClientCommand(data));
+                    break;
+                case MessageType.PilotInput:
+                    // Authority is checked server-side against the Pilot occupant (ADR-0016).
+                    _sim.SubmitPilotInput(pid, WireCodec.DecodePilotInput(data));
+                    break;
+            }
+        }
+
+        private void DispatchCommand(PlayerId pid, ClientCommand cmd)
+        {
             switch (cmd.Type)
             {
                 case ClientCommandType.RequestWarp:
@@ -58,6 +70,9 @@ namespace KSPClone.Net
                     break;
                 case ClientCommandType.ApproveWarp:
                     _sim.ApproveWarp(pid);
+                    break;
+                case ClientCommandType.OccupyStation:
+                    _sim.OccupyStation(pid, cmd.VesselId, cmd.Station);
                     break;
             }
         }

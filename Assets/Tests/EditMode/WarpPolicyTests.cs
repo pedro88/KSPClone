@@ -39,7 +39,7 @@ namespace KSPClone.SimCore.Tests
         public void AllWarpSafe_False_IfAnyVesselIsActivePhysics()
         {
             var onRails = new Vessel(VesselId.New(), new Orbit(7e6, 0, 0, 0, 0, 0, 0, CelestialBodyId.Planet));
-            var active  = new Vessel(VesselId.New(), new Orbit(7e6, 0, 0, 0, 0, 0, 0, CelestialBodyId.Planet)) { OnRails = false };
+            var active  = new Vessel(VesselId.New(), new Orbit(7e6, 0, 0, 0, 0, 0, 0, CelestialBodyId.Planet)) { State = VesselState.ActivePhysics };
             Assert.IsFalse(WarpPolicy.AllWarpSafe(new[] { onRails, active }));
         }
 

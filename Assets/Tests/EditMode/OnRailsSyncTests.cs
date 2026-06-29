@@ -84,7 +84,7 @@ namespace KSPClone.SimCore.Tests
         public void PhysicsVessel_IsNotSynced_ByRailsLoop()
         {
             var world = new SimWorld(EarthMoon());
-            var vessel = new Vessel(VesselId.New(), SeedOrbit()) { OnRails = false };
+            var vessel = new Vessel(VesselId.New(), SeedOrbit()) { State = VesselState.ActivePhysics };
             world.RegisterVessel(vessel);
 
             var scheduler = new SimScheduler(world);

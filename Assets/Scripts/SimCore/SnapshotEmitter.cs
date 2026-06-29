@@ -16,14 +16,26 @@ namespace KSPClone.SimCore
         public long Seq { get; }
         public Vector3d Position { get; }
         public Vector3d Velocity { get; }
+        /// <summary>Angular velocity (rad/s, world axes) — ADR-0013 §8.</summary>
+        public Vector3d AngularVelocity { get; }
+        /// <summary>The reconciliation ack: highest applied pilot-input tick (ADR-0013 §7). 0 for vessels with no pilot input.</summary>
+        public long LastProcessedClientTick { get; }
 
         public VesselSnapshot(VesselId vesselId, double gameTime, long seq, Vector3d position, Vector3d velocity)
+            : this(vesselId, gameTime, seq, position, velocity, Vector3d.Zero, 0L)
+        {
+        }
+
+        public VesselSnapshot(VesselId vesselId, double gameTime, long seq, Vector3d position, Vector3d velocity,
+            Vector3d angularVelocity, long lastProcessedClientTick)
         {
             VesselId = vesselId;
             GameTime = gameTime;
             Seq = seq;
             Position = position;
             Velocity = velocity;
+            AngularVelocity = angularVelocity;
+            LastProcessedClientTick = lastProcessedClientTick;
         }
     }
 
@@ -137,7 +149,8 @@ namespace KSPClone.SimCore
             {
                 if (!v.CachedWorldPosition.HasValue || !v.CachedWorldVelocity.HasValue) continue;
                 snapshots.Add(new VesselSnapshot(v.Id, t, EmittedSeq,
-                    v.CachedWorldPosition.Value, v.CachedWorldVelocity.Value));
+                    v.CachedWorldPosition.Value, v.CachedWorldVelocity.Value,
+                    v.CachedAngularVelocity ?? Vector3d.Zero, v.LastProcessedClientTick));
             }
             var bundle = new SnapshotBundle(t, EmittedSeq, snapshots);
             _onBundle?.Invoke(bundle);
