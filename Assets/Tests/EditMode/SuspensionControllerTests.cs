@@ -123,6 +123,31 @@ namespace KSPClone.SimCore.Tests
         }
 
         [Test]
+        public void Suspend_CapturesAngularVelocity_AndResume_RestoresIt()
+        {
+            // T14 captures "full rigid-body state (... linear/angular velocity)";
+            // a tumbling vessel must resume with its spin intact, not zeroed.
+            var (world, vessel) = MakeActiveVessel();
+            vessel.ThrustActive = true;
+            var spin = new Vector3d(0.1, -0.2, 0.3);
+            vessel.CachedAngularVelocity = spin;
+            var (registry, _) = AttachBubble(vessel);
+
+            SuspendedVesselState? captured = null;
+            var store = new SnapshotStore();
+            var controller = new SuspensionController(world, registry, store, new WarpSafeEvaluator());
+            controller.VesselSuspended += s => captured = s;
+            controller.Suspend(vessel.Id);
+
+            Assert.IsNotNull(captured);
+            Assert.AreEqual(spin, captured!.AngularVelocity, "Snapshot must capture angular velocity, not zero.");
+
+            Assert.IsTrue(controller.Resume(vessel.Id));
+            Assert.AreEqual(spin, vessel.CachedAngularVelocity,
+                "Resumed vessel must spin from the captured angular velocity.");
+        }
+
+        [Test]
         public void Resume_IntoMissingBubble_CreatesFreshBubble()
         {
             var (world, vessel) = MakeActiveVessel();

@@ -85,16 +85,49 @@ namespace KSPClone.SimCore
 
             var combinedMass = massA.MassKg + massB.MassKg;
 
+            var vA = a.CachedWorldVelocity!.Value;
+            var vB = b.CachedWorldVelocity!.Value;
+
             // p_total = m_a·v_a + m_b·v_b
-            var momentum = a.CachedWorldVelocity!.Value * massA.MassKg
-                         + b.CachedWorldVelocity!.Value * massB.MassKg;
+            var momentum = vA * massA.MassKg + vB * massB.MassKg;
             var combinedVelocity = momentum / combinedMass;
 
-            // Inertia: principal moments sum (M1 simplification).
+            // Inertia: principal moments sum (M1 simplification). Capture the
+            // combined moments in locals BEFORE writing them back — the
+            // survivor mass entry aliases massA or massB, so mutating it first
+            // would corrupt the angular-momentum sum below.
+            var combinedInertiaX = massA.InertiaPrincipalX + massB.InertiaPrincipalX;
+            var combinedInertiaY = massA.InertiaPrincipalY + massB.InertiaPrincipalY;
+            var combinedInertiaZ = massA.InertiaPrincipalZ + massB.InertiaPrincipalZ;
+
+            // Conserve total angular momentum about the combined COM (PHYS-5,
+            // M1-T18 step 2). About C, the orbital term of the combined body
+            // vanishes, so L_total = I_combined·ω_combined. Each input
+            // contributes its own spin (I_i·ω_i) plus the orbital term of its
+            // COM relative to C: m_i·(r_i − r_C)×v_i. With diagonal principal
+            // moments, I·ω and I⁻¹·L are component-wise (M1 simplification,
+            // matching the inertia-sum above).
+            var posA = a.CachedWorldPosition!.Value;
+            var posB = b.CachedWorldPosition!.Value;
+            var com = (posA * massA.MassKg + posB * massB.MassKg) / combinedMass;
+            var wA = a.CachedAngularVelocity ?? Vector3d.Zero;
+            var wB = b.CachedAngularVelocity ?? Vector3d.Zero;
+            var spin = new Vector3d(
+                massA.InertiaPrincipalX * wA.X + massB.InertiaPrincipalX * wB.X,
+                massA.InertiaPrincipalY * wA.Y + massB.InertiaPrincipalY * wB.Y,
+                massA.InertiaPrincipalZ * wA.Z + massB.InertiaPrincipalZ * wB.Z);
+            var orbital = Vector3d.Cross(posA - com, vA) * massA.MassKg
+                        + Vector3d.Cross(posB - com, vB) * massB.MassKg;
+            var totalL = spin + orbital;
+            var combinedAngularVelocity = new Vector3d(
+                totalL.X / combinedInertiaX,
+                totalL.Y / combinedInertiaY,
+                totalL.Z / combinedInertiaZ);
+
             survivorMassEntry.MassKg = combinedMass;
-            survivorMassEntry.InertiaPrincipalX = massA.InertiaPrincipalX + massB.InertiaPrincipalX;
-            survivorMassEntry.InertiaPrincipalY = massA.InertiaPrincipalY + massB.InertiaPrincipalY;
-            survivorMassEntry.InertiaPrincipalZ = massA.InertiaPrincipalZ + massB.InertiaPrincipalZ;
+            survivorMassEntry.InertiaPrincipalX = combinedInertiaX;
+            survivorMassEntry.InertiaPrincipalY = combinedInertiaY;
+            survivorMassEntry.InertiaPrincipalZ = combinedInertiaZ;
 
             // Remove the absorbed vessel from the bubble and the world.
             if (survivor.BubbleId is { } bid && _registry.TryGet(bid, out var bubble))
@@ -102,8 +135,13 @@ namespace KSPClone.SimCore
             _masses.Clear(absorbed.Id);
             _world.UnregisterVessel(absorbed.Id);
 
+            // The merged body carries the conserved linear + angular state;
+            // its position is the survivor's (no jump — M1-T19).
+            survivor.CachedWorldVelocity = combinedVelocity;
+            survivor.CachedAngularVelocity = combinedAngularVelocity;
+
             VesselsMerged?.Invoke(new DockMergedEvent(
-                survivor.Id, absorbed.Id, combinedMass, combinedVelocity, Vector3d.Zero));
+                survivor.Id, absorbed.Id, combinedMass, combinedVelocity, combinedAngularVelocity));
             return true;
         }
     }

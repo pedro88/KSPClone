@@ -50,6 +50,59 @@ namespace KSPClone.SimCore.Tests
         }
 
         [Test]
+        public void PortOffsets_BringDistantVesselCentersIntoCapture()
+        {
+            // Vessel bodies are 4 m apart — far outside the 10 cm capture
+            // distance — but each carries a port on its facing side so the
+            // ports themselves meet. The latch must test port frames, not
+            // vessel centers (M1-T17 step 1).
+            var (world, a) = MakeActiveVessel(Vector3d.Zero, Vector3d.Zero);
+            var (_, b) = MakeActiveVessel(new Vector3d(4.0, 0, 0), Vector3d.Zero);
+            world.RegisterVessel(b);
+            var registry = new BubbleRegistry();
+            var bubble = registry.Create(Vector3d.Zero);
+            bubble.Add(a.Id); a.BubbleId = bubble.Id;
+            bubble.Add(b.Id); b.BubbleId = bubble.Id;
+
+            var ports = new VesselPortRegistry();
+            // a's port juts +2 m toward b; b's port juts −1.96 m toward a → 4 cm gap.
+            ports.Set(a.Id, new[] { new DockingPort("a", new Vector3d(2, 0, 0), new Vector3d(1, 0, 0)) });
+            ports.Set(b.Id, new[] { new DockingPort("b", new Vector3d(-1.96, 0, 0), new Vector3d(-1, 0, 0)) });
+
+            int events = 0;
+            var sys = new DockingSystem(world, ports);
+            sys.DockLatched += _ => events++;
+            sys.RunLatchPass();
+
+            Assert.AreEqual(1, events, "Ports meet via their LocalPosition offsets even though vessel centers are 4 m apart.");
+        }
+
+        [Test]
+        public void CoincidentCenters_PortOffsetsApart_NoLatch()
+        {
+            // Inverse of the above: vessel centers coincide, but the ports
+            // point away from each other and are 4 m apart → no latch.
+            var (world, a) = MakeActiveVessel(Vector3d.Zero, Vector3d.Zero);
+            var (_, b) = MakeActiveVessel(Vector3d.Zero, Vector3d.Zero);
+            world.RegisterVessel(b);
+            var registry = new BubbleRegistry();
+            var bubble = registry.Create(Vector3d.Zero);
+            bubble.Add(a.Id); a.BubbleId = bubble.Id;
+            bubble.Add(b.Id); b.BubbleId = bubble.Id;
+
+            var ports = new VesselPortRegistry();
+            ports.Set(a.Id, new[] { new DockingPort("a", new Vector3d(2, 0, 0), new Vector3d(1, 0, 0)) });
+            ports.Set(b.Id, new[] { new DockingPort("b", new Vector3d(-2, 0, 0), new Vector3d(-1, 0, 0)) });
+
+            int events = 0;
+            var sys = new DockingSystem(world, ports);
+            sys.DockLatched += _ => events++;
+            sys.RunLatchPass();
+
+            Assert.AreEqual(0, events, "Ports 4 m apart must not latch even when vessel centers coincide.");
+        }
+
+        [Test]
         public void OutsideCaptureDistance_NoLatch()
         {
             var (world, a) = MakeActiveVessel(Vector3d.Zero, Vector3d.Zero);
@@ -181,6 +234,45 @@ namespace KSPClone.SimCore.Tests
             // b is heavier (2000 ≥ 1000) → b survives, lighter a is absorbed.
             Assert.IsFalse(world.Vessels.ContainsKey(a.Id), "lighter vessel a is absorbed");
             Assert.IsTrue(world.Vessels.ContainsKey(b.Id), "heavier vessel b survives");
+        }
+
+        [Test]
+        public void Merge_ConservesAngularMomentum_FromOrbitalAndSpin()
+        {
+            // Two equal vessels straddling the COM with equal-and-opposite
+            // tangential velocities carry net angular momentum about the join
+            // even though linear momentum cancels (M1-T18 step 2). The merged
+            // body must spin so that I_combined·ω = total L.
+            var (world, a, masses) = MakeVesselWithMass(
+                VesselId.New(), new Vector3d(-0.05, 0, 0), new Vector3d(0, 10, 0), 1000.0);
+            var bId = VesselId.New();
+            masses.Set(bId, new RigidVesselMass(1000.0, 1000.0, 1000.0, 1000.0));
+            var b = new Vessel(bId, new Orbit(7_000_000.0, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet))
+            {
+                State = VesselState.ActivePhysics,
+                CachedWorldPosition = new Vector3d(0.05, 0, 0),
+                CachedWorldVelocity = new Vector3d(0, -10, 0)
+            };
+            world.RegisterVessel(b);
+            var registry = new BubbleRegistry();
+            var bubble = registry.Create(Vector3d.Zero);
+            bubble.Add(a.Id); a.BubbleId = bubble.Id;
+            bubble.Add(b.Id); b.BubbleId = bubble.Id;
+
+            var merger = new DockingMerger(world, registry, masses);
+            DockMergedEvent? captured = null;
+            merger.VesselsMerged += e => captured = e;
+
+            Assert.IsTrue(merger.Merge(a.Id, bId));
+
+            // Linear momentum cancels.
+            Assert.AreEqual(0.0, captured!.Value.CombinedVelocity.Y, 1e-9);
+            // L_z = m·(r_a×v_a + r_b×v_b)_z = 1000·(-0.5) + 1000·(-0.5) = -1000.
+            // I_z(combined) = 2000 → ω_z = -0.5 rad/s.
+            Assert.AreEqual(-0.5, captured.Value.CombinedAngularVelocity.Z, 1e-9,
+                "Merged body must spin to conserve angular momentum.");
+            Assert.AreEqual(0.0, captured.Value.CombinedAngularVelocity.X, 1e-9);
+            Assert.AreEqual(0.0, captured.Value.CombinedAngularVelocity.Y, 1e-9);
         }
 
         [Test]
