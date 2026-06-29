@@ -23,6 +23,7 @@ namespace KSPClone.Client
 
         private LiteNetLibClientTransport _transport;
         private ClientWorldRenderer _renderer;
+        private float _lastThrottle;
 
         // Start (not Awake): if the server lives in the same scene, its Awake
         // has already started the listener by the time we connect here.
@@ -53,6 +54,7 @@ namespace KSPClone.Client
             if (Flight.ControlledVesselId is null) return;
 
             float throttle = Input.GetKey(KeyCode.LeftShift) ? 1f : 0f;
+            _lastThrottle = throttle;
             float pitch = Input.GetAxis("Vertical") * _attitudeRateRadPerSec;
             float yaw = Input.GetAxis("Horizontal") * _attitudeRateRadPerSec;
             float roll = ((Input.GetKey(KeyCode.E) ? 1f : 0f) - (Input.GetKey(KeyCode.Q) ? 1f : 0f)) * _attitudeRateRadPerSec;
@@ -63,7 +65,7 @@ namespace KSPClone.Client
 
         private void LateUpdate()
         {
-            _renderer?.Render(Flight);
+            _renderer?.Render(Flight, _lastThrottle);
         }
 
         private void OnDestroy()

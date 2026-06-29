@@ -48,6 +48,21 @@ namespace KSPClone.Client
                 peer.ApproveWarp();
 
             GUILayout.EndArea();
+
+            // Pilot controls cheat-sheet + legend for the 3D view.
+            GUILayout.BeginArea(new Rect(10, Screen.height - 230, 360, 220), GUI.skin.box);
+            GUILayout.Label("== CONTROLS (Pilot) ==");
+            GUILayout.Label("Shift : throttle (hold = full)");
+            GUILayout.Label("W / S : pitch");
+            GUILayout.Label("A / D : yaw");
+            GUILayout.Label("Q / E : roll");
+            GUILayout.Label("Right-drag : orbit camera   Wheel : zoom");
+            GUILayout.Space(6);
+            GUILayout.Label("cyan capsule  = your vessel");
+            GUILayout.Label("grey cubes    = world reference (speed)");
+            GUILayout.Label("orange plume  = thrust");
+            GUILayout.Label("dark plane    = launch pad (hold Shift to lift off!)");
+            GUILayout.EndArea();
         }
     }
 }

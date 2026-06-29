@@ -19,6 +19,18 @@ namespace KSPClone.Server
 
         [SerializeField] private int _port = 9050;
 
+        // Flight-sandbox aid (not a spec behaviour): place the demo craft at
+        // rest just above the planet surface so it launches like a pad — real
+        // gravity (~9.8 m/s² at Earth radius, TWR≈1.2) pulls it down and the
+        // throttle lifts it. Zeroing the orbital velocity on promotion is what
+        // makes "at rest" possible. Turn off for a realistic orbital insertion.
+        [SerializeField] private bool _demoStartAtRest = true;
+
+        // Spawn altitude above the planet surface for the launch-pad sandbox
+        // (km). 0 = on the surface. NB: there is no ground collision — hold
+        // throttle to climb; cutting it lets the craft fall straight through.
+        [SerializeField] private double _demoStartAltitudeKm = 0.0;
+
         public ServerSimulation Sim { get; private set; }
 
         private WorldRepository _repo;
@@ -49,6 +61,7 @@ namespace KSPClone.Server
             Sim = new ServerSimulation(world);
             WireActivePhysics();
             WirePersistence();
+            if (_demoStartAtRest) ApplyDemoStartAtRest(world);
 
             _transport = new LiteNetLibServerTransport();
             _transport.Start(_port);
@@ -67,9 +80,39 @@ namespace KSPClone.Server
 
         private void OnDestroy()
         {
+            if (Sim?.Promotion != null) Sim.Promotion.VesselPromoted -= OnDemoPromoted;
             _vesselBodies?.Dispose();
             _bubbleHost?.Dispose();
             _transport?.Dispose();
+        }
+
+        // Place the demo craft on the planet surface (circular element at
+        // R = Earth radius + altitude, positioned at that point now) and zero
+        // its orbital velocity the instant it promotes. Net: it sits at rest at
+        // ~9.8 m/s² gravity, so the throttle is a real launch. A sandbox initial
+        // condition, not an orbit; flip _demoStartAtRest off for the real seed.
+        private void ApplyDemoStartAtRest(SimWorld world)
+        {
+            if (world.Vessels.TryGetValue(WorldSeed.SeedVesselId, out var v))
+            {
+                var r = WorldSeed.EarthRadius + _demoStartAltitudeKm * 1000.0;
+                v.Orbit = new Orbit(
+                    r, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    world.Clock.GameTimeSeconds, v.Orbit.ParentBody);
+            }
+            // Runs after ServerVesselBodies' own promotion handler (subscribed in
+            // WireActivePhysics), so the rigid body already exists here.
+            Sim.Promotion.VesselPromoted += OnDemoPromoted;
+        }
+
+        private void OnDemoPromoted(PromotionEvent e)
+        {
+            if (!e.VesselId.Equals(WorldSeed.SeedVesselId)) return;
+            if (_vesselBodies != null && _vesselBodies.TryGetBody(e.VesselId, out var body) && body != null)
+            {
+                body.Body.linearVelocity = Vector3.zero;
+                body.Body.angularVelocity = Vector3.zero;
+            }
         }
 
         // Stand up the active-physics column: seed the demo craft's mass/engines,
