@@ -8,6 +8,21 @@ The execution breakdown under [spec.md](./spec.md).
 
 Ordering follows the constitution's "prove the spine first" (Art. 10): M0 is the skeleton; features layer on after. PROG (M5) may interleave once tech needs meaning.
 
+## Implementation status (live)
+
+Updated as milestones land. Detailed ticket status lives in [GitHub issues](https://github.com/pedro88/KSPClone/issues) (one issue per task).
+
+- **M0 — Skeleton (the spine): ✅ COMPLETE.** The full server→wire→client spine is built, tested, and demonstrated end-to-end over a **headless dedicated-server build** (T1) talking to a client over **real LiteNetLib UDP**. Highlights: `SimCore.ServerSimulation` composes the warp-vote FSM, auto-limit, POI scan, SOI re-parenting, snapshot emitter and connection registry per fixed tick; `ServerBootstrap` restores-or-seeds (`WorldSeed`) with Postgres write-through (PERSIST-1/2/3 verified against Postgres); `KSPClone.Net` ships the P-1 wire codec (full snapshots, lossless round-trip), a loopback double (integration-tested) and the LiteNetLib transport; `KSPClone.Client` connects, interpolates snapshots, and sends warp commands; `ServerBuilder` produces the headless `-batchmode` server binary. Exit requirements TIME-1/2/3/4/5/6, ORBIT-1/2/3, NET-1/4/5, PERSIST-1/2/3 all live and verified. Known deferrals carried into M1: no on-rails orbit/SOI-change replication channel yet (client vessel `parent`/elements come from the connect handshake; position is streamed); snapshots ship ReliableOrdered (move to unreliable-sequenced when measured). Warp policy: **ADR-0010 amended** — bands contiguous (≤4× physics, >4× on-rails), no gap.
+- **M1 — Physics bubble + prediction: ✅ COMPLETE (code, incl. end-to-end wiring); runtime validation pending.** Tickets T01–T19 (bricks) + Slice 1.6 T20–T25 (wiring) landed on `feat/m1`. Decisions **P-1** and **P-4** resolved up-front via ADR-0012 (floating-origin rebasing: 1024 m threshold, centroid origin, merge-keep-larger, empty bubbles destroyed) and ADR-0013 (full doubles on the wire, unreliable-sequenced snapshots + reliable-ordered events with the 11-tag event surface). SimCore data model: `PhysicsBubble`, `BubbleRegistry`, `BubbleManager` (clustering pass, 50 km radius via M1-T02), `FloatingOriginManager`, `PromotionController`, `DemotionController`, `WarpSafeEvaluator`, `RigidVesselMass`, `EngineModule` + `VesselEngineRegistry` (Tsiolkovsky-accurate mass flow), `StructuralFailureSystem`, `InputChannel`, `ClientPredictor` + `ClientReconciler` + `LatencyMonitor`, `SuspensionController` + `VesselSnapshot` + `SnapshotStore`, `DockingSystem` + `DockingMerger`. Server/Unity host: `UnityBubbleHost` (PhysicsScene per bubble), `RigidVesselBody`, `BubbleIntegrator` (60 Hz step with gravity, thrust, attitude, rebase). Net/P-1: `WireCodec` extended with `PilotInput` (MessageType 4). **Slice 1.6 wiring (ADR-0014/0015/0016):** `ServerSimulation` now composes the M1 passes in the canonical per-tick order (soi→promote→cluster→`IBubbleStepper`→demote→suspend→warp→snapshot) with the PhysX integration injected as `IBubbleStepper`; `ServerBootstrap` seeds the demo craft's mass/engines and mounts `UnityBubbleHost`+`BubbleIntegrator`+`ServerVesselBodies` (rigidbody lifecycle on promote/demote/suspend/resume); a SimCore `ControlRegistry`+`Station` gates pilot-input authority (`OccupyStation`/`SubmitPilotInput`); the snapshot carries the reconciliation ack (`LastProcessedClientTick`) + `AngularVelocity`; `ClientFlightModel` predicts the controlled vessel, reconciles, and interpolates the rest; `ClientWorldRenderer` renders into a single controlled-vessel-anchored float frame. Exit requirements PHYS-1/2/3/4/5/6, NET-1/2/3/6, SUSP-2/3/4, ART-1/3/4 all implemented; SimCore/Net logic unit-tested in EditMode (incl. composition order, control authority, snapshot ack round-trip, predict/reconcile/boundary, client render origin). Caveat: the Unity/PhysX host (T21) and the 3D scene (T25) are authored but not yet run against a live editor this cycle — runtime validation of `BubbleIntegrator.Step()`, per-bubble `PhysicsScene` allocation, and in-flight piloting happens on the next in-editor run (and the new `.cs` files need their `.meta` generated on import).
+- **M2 — Multi-crew stations:** not started.
+- **M3 — Collaborative VAB:** not started.
+- **M4 — Comms & ground control:** not started.
+- **M5 — Progression (Science mode):** not started.
+
+P-1 and P-4 are **resolved**: ADR-0012 + ADR-0013.
+
+Open decisions remaining (gating specific slices) are tracked at the bottom of this file.
+
 ---
 
 ## M0 — Skeleton (the spine)
@@ -17,28 +32,28 @@ Ordering follows the constitution's "prove the spine first" (Art. 10): M0 is the
 **Demo:** client connects, sees a vessel coasting in orbit; players vote a warp; clock jumps but auto-stops at the next SOI crossing; kill the server, restart, world resumes identically.
 
 ### Slice 0.1 — Fixed-step headless server + master clock
-- [ ] T1 — Unity headless build target that runs with no renderer → server process starts under `-batchmode -nographics` and logs ticks (NET-1, Art.2)
-- [ ] T2 — Fixed 60 Hz scheduler decoupled from frame → tick interval stable under artificial render stalls (NET-5, Art.2)
-- [ ] T3 — Master clock advances 1:1 with real-time, single instance → 60 s real = 60 s game-time, ±1 tick (TIME-1, TIME-2)
+- [x] T1 — Unity headless build target that runs with no renderer → server process starts under `-batchmode -nographics` and logs ticks (NET-1, Art.2) — `ServerBuilder` (dedicated-server subtarget) + `ServerBootstrap` batchmode config
+- [x] T2 — Fixed 60 Hz scheduler decoupled from frame → tick interval stable under artificial render stalls (NET-5, Art.2)
+- [x] T3 — Master clock advances 1:1 with real-time, single instance → 60 s real = 60 s game-time, ±1 tick (TIME-1, TIME-2)
 
 ### Slice 0.2 — On-rails vessel + patched conics
-- [ ] T4 — Body/SOI model + one vessel with orbital elements → vessel data structure persists an orbit (ORBIT-1)
-- [ ] T5 — Closed-form Kepler propagator `position(game-time)` → position at t+arbitrary matches numeric reference within tolerance, no stepping (ORBIT-2)
-- [ ] T6 — SOI-crossing detection → predicted crossing time registered as a POI, orbit re-parents on cross (ORBIT-3)
+- [x] T4 — Body/SOI model + one vessel with orbital elements → vessel data structure persists an orbit (ORBIT-1)
+- [x] T5 — Closed-form Kepler propagator `position(game-time)` → position at t+arbitrary matches numeric reference within tolerance, no stepping (ORBIT-2)
+- [x] T6 — SOI-crossing detection → predicted crossing time registered as a POI, orbit re-parents on cross (ORBIT-3)
 
 ### Slice 0.3 — Client connect + observe
-- [ ] T7 — Client connects to server, receives world handshake → client lists the vessel and current game-time (NET-1)
-- [ ] T8 — Snapshot emitter at 20–30 Hz + client interpolation → client renders vessel position smoothly from snapshots (NET-4, NET-5)
+- [x] T7 — Client connects to server, receives world handshake → client lists the vessel and current game-time (NET-1)
+- [x] T8 — Snapshot emitter at 20–30 Hz + client interpolation → client renders vessel position smoothly from snapshots (NET-4, NET-5)
 
 ### Slice 0.4 — Warp vote + auto-limit
-- [ ] T9 — Warp request + unanimous vote state machine → warp starts only on all-approve; non-approve blocks (TIME-3)
-- [ ] T10 — Two warp kinds plumbed (physics / on-rails), on-rails advances clock fast → x1000 advances game-time, vessel stays on analytic orbit (TIME-7)
-- [ ] T11 — Auto-limit to earliest global POI → warp halts exactly at next SOI crossing, never past (TIME-4)
-- [ ] T12 — Vote membership on connect/disconnect → disconnect mid-warp continues; connect mid-warp halts to baseline (TIME-5, TIME-6)
+- [x] T9 — Warp request + unanimous vote state machine → warp starts only on all-approve; non-approve blocks (TIME-3)
+- [x] T10 — Two warp kinds plumbed (physics / on-rails), on-rails advances clock fast → x1000 advances game-time, vessel stays on analytic orbit (TIME-7)
+- [x] T11 — Auto-limit to earliest global POI → warp halts exactly at next SOI crossing, never past (TIME-4)
+- [x] T12 — Vote membership on connect/disconnect → disconnect mid-warp continues; connect mid-warp halts to baseline (TIME-5, TIME-6)
 
 ### Slice 0.5 — Persistence
-- [ ] T13 — Postgres schema (program, vessel, clock) + write-through on POI/warp-commit → row updates observed at events (PERSIST-1, PERSIST-2)
-- [ ] T14 — Restart restore → kill + restart server; clock, vessel orbit, and POIs resume identically (PERSIST-3, SUSP-1)
+- [x] T13 — Postgres schema (program, vessel, clock) + write-through on POI/warp-commit → row updates observed at events (PERSIST-1, PERSIST-2)
+- [x] T14 — Restart restore → kill + restart server; clock, vessel orbit, and POIs resume identically (PERSIST-3, SUSP-1)
 
 ---
 
@@ -49,28 +64,28 @@ Ordering follows the constitution's "prove the spine first" (Art. 10): M0 is the
 **Demo:** player loads a vessel (it promotes), lights the engine and hand-flies under prediction with no lag; a second vessel approaches and they dock with no hitch; player leaves mid-burn → vessel suspends; reload resumes from snapshot.
 
 ### Slice 1.1 — Bubble + floating origin (resolve P-4 first)
-- [ ] T15 — Bubble manager: create/destroy bubble per vessel cluster → multiple bubbles coexist far apart in world coords (PHYS-1)
-- [ ] T16 — Per-bubble floating origin + rebasing → vessel at 10^9 m from origin simulates without precision artifacts (PHYS-1, Art.3)
-- [ ] T17 — Promotion on player approach/load → vessel switches on-rails→active at range threshold (PHYS-2)
-- [ ] T18 — Demotion when warp-safe + unattended → vessel returns to analytic orbit, state continuous across switch (PHYS-3)
+- [x] T15 — Bubble manager: create/destroy bubble per vessel cluster → multiple bubbles coexist far apart in world coords (PHYS-1)
+- [x] T16 — Per-bubble floating origin + rebasing → vessel at 10^9 m from origin simulates without precision artifacts (PHYS-1, Art.3)
+- [x] T17 — Promotion on player approach/load → vessel switches on-rails→active at range threshold (PHYS-2)
+- [x] T18 — Demotion when warp-safe + unattended → vessel returns to analytic orbit, state continuous across switch (PHYS-3)
 
 ### Slice 1.2 — Active rigid-body flight (resolve P-1 first)
-- [ ] T19 — Rigid-body integrator in bubble, thrust + gravity → vessel accelerates under engine, matches expected delta-v (PHYS-4)
-- [ ] T20 — Input channel: pilot throttle/attitude routed to server → server applies authoritative inputs (NET-1, CREW-1 partial)
-- [ ] T21 — Discrete structural failure at load threshold → joint/decoupler breaks as an event, no soft flex (PHYS-6)
+- [x] T19 — Rigid-body integrator in bubble, thrust + gravity → vessel accelerates under engine, matches expected delta-v (PHYS-4)
+- [x] T20 — Input channel: pilot throttle/attitude routed to server → server applies authoritative inputs (NET-1, CREW-1 partial)
+- [x] T21 — Discrete structural failure at load threshold → joint/decoupler breaks as an event, no soft flex (PHYS-6)
 
 ### Slice 1.3 — Prediction + reconciliation
-- [ ] T22 — Client predicts controlled vessel from local inputs → stick has zero perceived lag at 80 ms simulated RTT (NET-2, NET-6)
-- [ ] T23 — Server reconciliation, smoothed sub-threshold / snap on large desync → injected divergence corrects without visible pop under threshold (NET-3)
+- [x] T22 — Client predicts controlled vessel from local inputs → stick has zero perceived lag at 80 ms simulated RTT (NET-2, NET-6)
+- [x] T23 — Server reconciliation, smoothed sub-threshold / snap on large desync → injected divergence corrects without visible pop under threshold (NET-3)
 
 ### Slice 1.4 — Suspension lifecycle
-- [ ] T24 — Suspend non-warp-safe vessel on last-leave → snapshot taken, vessel clock pauses (SUSP-3)
-- [ ] T25 — Resume from snapshot on reload, no retro-sim → reloaded vessel continues exactly from snapshot state (SUSP-4)
-- [ ] T26 — Demote (not suspend) when warp-safe on last-leave → orbiting vessel goes on-rails instead (SUSP-2)
+- [x] T24 — Suspend non-warp-safe vessel on last-leave → snapshot taken, vessel clock pauses (SUSP-3)
+- [x] T25 — Resume from snapshot on reload, no retro-sim → reloaded vessel continues exactly from snapshot state (SUSP-4)
+- [x] T26 — Demote (not suspend) when warp-safe on last-leave → orbiting vessel goes on-rails instead (SUSP-2)
 
 ### Slice 1.5 — Docking
-- [ ] T27 — Two vessels in one bubble, docking-port latch → ports within tolerance join into one vessel (PHYS-5)
-- [ ] T28 — No authority handoff at contact → both vessels already share the bubble before latch; no state jump (PHYS-5, Art.1)
+- [x] T27 — Two vessels in one bubble, docking-port latch → ports within tolerance join into one vessel (PHYS-5)
+- [x] T28 — No authority handoff at contact → both vessels already share the bubble before latch; no state jump (PHYS-5, Art.1)
 
 ---
 

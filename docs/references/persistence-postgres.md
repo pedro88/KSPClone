@@ -287,6 +287,18 @@ The whole point of one store (ADR-0007): *one backup/restore story.* At kilobyte
 6. **Backups: daily `pg_dump -Fc` + tested `pg_restore`** (Section 10). Defer PITR unless a day of loss is unacceptable.
 7. **Defer the GIN index, async/write-behind, and a second datastore** until a concrete measurement demands them (ADR-0007's explicit stance).
 
+## Implementation status (M0)
+
+M0 ships the schema + repository + event sink + restorer, behind the `KSPClone.Persistence` assembly (noEngineReferences=true, references SimCore). The transport layer above the SQL is plain Npgsql.
+
+Concrete refinements applied during M0 (worth folding into the upstream pattern):
+
+- **Npgsql 8 netstandard2.1, vendored as a single `Npgsql.dll`** in `Assets/Plugins/Npgsql/`. Npgsql 6.x netstandard2.0 was rejected — too many BCL package dependencies that fight with Mono. See ADR-0011 for the full rationale.
+- **`ON CONFLICT DO UPDATE` for upserts.** `UpsertProgram`, `UpsertClock`, `UpsertVessel` are all idempotent at the SQL level. Each opens its own connection per call (acceptable at our write rate; a single `NpgsqlDataSource` will replace this in M1 when async / connection pooling become worth it).
+- **Atomicity check in tests.** `tests/persistence/test_event_sink_contract.py` deliberately inserts a bad value mid-transaction and asserts that the clock row remains at its previous value — proves the "one transaction per coupled-fact event" rule holds.
+- **Restore resume via `Advance`, not a setter.** `MasterClock` keeps its `GameTimeSeconds` setter private; the `WorldRestorer` resumes the clock by setting `Rate = 1.0` and calling `Advance(gameTime)`. This preserves the single-writer rule for the master clock (Constitution Art. 1). The only setter escape hatch is `MasterClock.ClampTo`, used exclusively by the warp auto-limit.
+- **No `event_log` table yet.** The synchronous write-through path is sufficient at M0 write rates. Add it when async persistence arrives (the recommended path step 4).
+
 ## Open questions for our case
 
 - **Active-vessel crash window.** An *active-physics* vessel near a player is only persisted at suspension/demotion. If the server crashes mid-flight, that vessel reverts to its last committed orbital row (or snapshot). Is that acceptable, or do we want a periodic best-effort snapshot of active vessels (e.g. every N seconds, async)? This trades a little write volume for less lost progress.

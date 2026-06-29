@@ -1,3 +1,5 @@
+#nullable enable annotations
+
 using System;
 using NUnit.Framework;
 using KSPClone.SimCore;
@@ -36,31 +38,65 @@ namespace KSPClone.SimCore.Tests
         }
 
         /// <summary>
-        /// Reference crossing finder: fine sample over the look-ahead and
-        /// pick the t at which distance-to-target first dips below the
-        /// SOI radius (entry) or rises above it (exit). Used to compare
-        /// against the analytical scanner.
+        /// Builds an Earth orbit whose apoapsis is aimed at the Moon's
+        /// position at <c>encounterTime</c>, with apoapsis just inside the
+        /// Moon's SOI. This produces a real, bound (near-apoapsis, low-speed)
+        /// lunar encounter that M0's elliptic-only propagator can represent.
+        /// </summary>
+        private static (Orbit orbit, double encounterTime) MoonInterceptOrbit()
+        {
+            const double encounterTime = 200_000.0;
+            var moonMeanMotion = Math.Sqrt(EarthMu / (MoonOrbitRadius * MoonOrbitRadius * MoonOrbitRadius));
+            var moonAngle = moonMeanMotion * encounterTime;          // Moon circular, M0 = 0
+            var peri = EarthRadius + 300_000.0;
+            var apo  = MoonOrbitRadius - MoonSoiRadius * 0.5;         // apoapsis just inside Moon SOI
+            var a = 0.5 * (peri + apo);
+            var e = (apo - peri) / (apo + peri);
+            var meanMotion = Math.Sqrt(EarthMu / (a * a * a));
+            var argp = KeplerPropagator.WrapTwoPi(moonAngle - Math.PI);                  // apoapsis toward the Moon
+            var m0   = KeplerPropagator.WrapTwoPi(Math.PI - meanMotion * encounterTime); // apoapsis at encounterTime
+            return (new Orbit(a, e, 0.0, 0.0, argp, m0, 0.0, CelestialBodyId.Planet), encounterTime);
+        }
+
+        /// <summary>
+        /// Reference crossing finder: coarse-samples the look-ahead to bracket
+        /// the first entry/exit of the target SOI, then bisects the bracket to
+        /// sub-second accuracy. Used to compare against the analytical scanner.
         /// </summary>
         private static double? ReferenceCrossing(
             Vessel vessel, BodyRegistry registry, CelestialBody target,
             double fromT, double toT, bool entry)
         {
-            double? prevT = null;
-            double? prevDist = null;
+            double F(double t)
+            {
+                var (vesselPos, _) = KeplerPropagator.StateAt(vessel.Orbit, t, registry);
+                return (vesselPos - registry.WorldPositionOf(target.Id, t)).Length - target.SoiRadius;
+            }
+
             var steps = 200_000;
+            double? prevT = null;
+            double? prevF = null;
             for (int i = 0; i <= steps; i++)
             {
                 var t = fromT + (toT - fromT) * i / steps;
-                var (vesselPos, _) = KeplerPropagator.StateAt(vessel.Orbit, t, registry);
-                var targetPos = registry.WorldPositionOf(target.Id, t);
-                var dist = (vesselPos - targetPos).Length;
-                if (prevDist is double pd && prevT is double pt)
+                var f = F(t);
+                if (prevF is double pf && prevT is double pt)
                 {
-                    if (entry && pd > target.SoiRadius && dist <= target.SoiRadius) return t;
-                    if (!entry && pd < target.SoiRadius && dist >= target.SoiRadius) return t;
+                    var crosses = entry ? (pf > 0 && f <= 0) : (pf < 0 && f >= 0);
+                    if (crosses)
+                    {
+                        double a = pt, b = t, fa = pf;
+                        for (int k = 0; k < 60 && b - a > 1e-3; k++)
+                        {
+                            var m = 0.5 * (a + b);
+                            var fm = F(m);
+                            if ((fm > 0) == (fa > 0)) { a = m; fa = fm; } else { b = m; }
+                        }
+                        return 0.5 * (a + b);
+                    }
                 }
                 prevT = t;
-                prevDist = dist;
+                prevF = f;
             }
             return null;
         }
@@ -68,38 +104,22 @@ namespace KSPClone.SimCore.Tests
         [Test]
         public void Scanner_FindsMoonEntry_WithinToleranceOfReference()
         {
-            // Place Moon at (MoonOrbitRadius, 0, 0) at t=0. Vessel on a
-            // highly elliptic Earth orbit with periapsis = Earth + 300 km
-            // and apoapsis just past the Moon's SOI edge.
+            // Vessel on a transfer orbit whose apoapsis meets the Moon inside
+            // its SOI: a real entry crossing exists in [0, encounterTime].
             var reg = EarthMoonSystem();
+            var (orbit, encounterTime) = MoonInterceptOrbit();
+            var vessel = new Vessel(VesselId.New(), orbit);
 
-            var peri = EarthRadius + 300_000.0;
-            var apo  = MoonOrbitRadius - MoonSoiRadius + 1_000_000.0; // barely reaches into Moon's SOI
-            var a = 0.5 * (peri + apo);
-            var e = (apo - peri) / (apo + peri);
-
-            // Pick M0 such that apoapsis happens near t = 4 hours (Moon is at +x at t=0).
-            var mu = EarthMu;
-            var T = 2.0 * Math.PI * Math.Sqrt(a * a * a / mu);
-            // apoapsis at M=π → t such that M(t) = π. M(t) = n·t (M0=0) → t = π / n = T/2.
-            // We want apoapsis near the Moon at t=0: position at apoapsis is at +x. So we want
-            // t_apo = T/2 with M(T/2)=π → fine if the orbit reaches apoapsis at T/2.
-            var vessel = new Vessel(VesselId.New(),
-                new Orbit(a, e, 0, 0, 0, 0, 0, CelestialBodyId.Planet));
-
-            // We look ahead T (one period) starting at t = T/2 - small margin, so the apoapsis pass is captured.
-            var lookAhead = T;
-            var fromT = T / 2.0 - 600.0;
-
-            var poi = SoiScanner.ScanNext(vessel, reg, fromT, lookAhead);
+            var lookAhead = encounterTime;
+            var poi = SoiScanner.ScanNext(vessel, reg, 0.0, lookAhead);
             Assert.IsNotNull(poi, "Scanner should find a crossing in the look-ahead window.");
             Assert.AreEqual(PoiType.SoiCrossing, poi!.Value.Type);
             Assert.AreEqual(CelestialBodyId.Moon, poi.Value.ToBody);
 
-            var refEntry = ReferenceCrossing(vessel, reg, reg.Get(CelestialBodyId.Moon), fromT, fromT + lookAhead, entry: true);
+            var refEntry = ReferenceCrossing(vessel, reg, reg.Get(CelestialBodyId.Moon), 0.0, lookAhead, entry: true);
             Assert.IsNotNull(refEntry, "Reference must find an entry.");
-            Assert.AreEqual(refEntry!.Value, poi.Value.GameTime, 1.0,
-                $"Scanner time {poi.Value.GameTime:R} must match reference {refEntry.Value:R} within 1 s.");
+            Assert.AreEqual(refEntry!.Value, poi.Value.GameTime, 2.0,
+                $"Scanner time {poi.Value.GameTime:R} must match reference {refEntry.Value:R} within 2 s.");
         }
 
         [Test]

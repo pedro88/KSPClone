@@ -1,0 +1,9 @@
+# Warp bands are contiguous: ≤4× is physics, >4× is on-rails (no rejected gap)
+
+`WarpPolicy.ClassifyMultiplier` maps any multiplier `> 1` to a kind: at or below `PhysicsWarpMaxMultiplier` (4×) it is `WarpKind.Physics`; above it, `WarpKind.OnRails`. There is no third mode and no rejected middle band — the two bands are contiguous.
+
+Why a single threshold, not two disjoint bands: physics warp keeps the 60 Hz integrator stepping, so it is capped where per-tick delta-v begins to exceed simulation tolerance (~4×). On-rails warp advances only closed-form conics — its cost is identical at 5× or 100000×, bounded only by the player's patience. The only real boundary is therefore the physics ceiling; above it, the on-rails path handles every rate. Lower on-rails rates (e.g. 50×, 100×) are genuinely useful for approaching an event under fine control, exactly as in KSP.
+
+The server (`WarpStateMachine.RequestWarp`) enforces consistency: a request whose declared `WarpKind` contradicts `ClassifyMultiplier(multiplier)` is refused — so "physics at 100×" (impossible) is rejected outright rather than silently mode-switched. That preserves the "no silent mode switch" guarantee, which is how time-acceleration bugs are kept from hiding. OnRails additionally requires every in-scope vessel to be *warp-safe*; the host injects that predicate into the FSM (no-op in M0 where all vessels are on-rails; meaningful from M1 once physics bubbles exist).
+
+**Supersedes** the original decision (rejecting multipliers in the `(4, 1000)` gap outright). That rested on the premise that intermediate multipliers had "no use case" — which was wrong: in KSP, 5×–100× are *on-rails* levels players rely on for fine approach control, and our global auto-limit (TIME-4) reduces but does not eliminate that need. The `1000×` floor was arbitrary, and removing it is technically free because on-rails cost is independent of the rate. The thresholds remain constants in `WarpPolicy`, easy to retune.

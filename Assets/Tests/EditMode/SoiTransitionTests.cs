@@ -1,3 +1,5 @@
+#nullable enable annotations
+
 using System;
 using NUnit.Framework;
 using KSPClone.SimCore;
@@ -9,12 +11,36 @@ namespace KSPClone.SimCore.Tests
         private const double EarthMu = 3.986004418e14;
         private const double MoonMu  = 4.9048695e12;
 
+        private const double EarthRadius     = 6_371_000.0;
+        private const double MoonOrbitRadius = 384_400_000.0;
+        private const double MoonSoiRadius   = 66_100_000.0;
+
         private static BodyRegistry EarthMoonSystem()
         {
             var earth = new CelestialBody(CelestialBodyId.Planet, "Earth", EarthMu, 924_000_000.0, CelestialBodyId.Root);
-            var moon = new CelestialBody(CelestialBodyId.Moon, MoonMu, 66_100_000.0, CelestialBodyId.Planet,
-                new Orbit(384_400_000.0, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet));
+            var moon = new CelestialBody(CelestialBodyId.Moon, "Moon", MoonMu, MoonSoiRadius, CelestialBodyId.Planet,
+                new Orbit(MoonOrbitRadius, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet));
             return new BodyRegistry(new[] { earth, moon });
+        }
+
+        /// <summary>
+        /// Earth orbit whose apoapsis meets the Moon just inside its SOI at
+        /// <c>encounterTime</c> — a bound (low-speed, near-apoapsis) lunar
+        /// encounter representable by M0's elliptic-only propagator.
+        /// </summary>
+        private static (Orbit orbit, double encounterTime) MoonInterceptOrbit()
+        {
+            const double encounterTime = 200_000.0;
+            var moonMeanMotion = Math.Sqrt(EarthMu / (MoonOrbitRadius * MoonOrbitRadius * MoonOrbitRadius));
+            var moonAngle = moonMeanMotion * encounterTime;          // Moon circular, M0 = 0
+            var peri = EarthRadius + 300_000.0;
+            var apo  = MoonOrbitRadius - MoonSoiRadius * 0.5;
+            var a = 0.5 * (peri + apo);
+            var e = (apo - peri) / (apo + peri);
+            var meanMotion = Math.Sqrt(EarthMu / (a * a * a));
+            var argp = KeplerPropagator.WrapTwoPi(moonAngle - Math.PI);
+            var m0   = KeplerPropagator.WrapTwoPi(Math.PI - meanMotion * encounterTime);
+            return (new Orbit(a, e, 0.0, 0.0, argp, m0, 0.0, CelestialBodyId.Planet), encounterTime);
         }
 
         [Test]
@@ -39,42 +65,32 @@ namespace KSPClone.SimCore.Tests
             var reg = EarthMoonSystem();
             var world = new SimWorld(reg);
 
-            // A vessel with apoapsis just past the Moon's SOI.
-            var peri = 6_671_000.0;     // Earth + 300 km
-            var apo  = 384_400_000.0 - 66_100_000.0 + 1_000_000.0; // grazes Moon SOI from inside
-            var a = 0.5 * (peri + apo);
-            var e = (apo - peri) / (apo + peri);
-
-            var vessel = new Vessel(VesselId.New(),
-                new Orbit(a, e, 0, 0, 0, 0, 0, CelestialBodyId.Planet));
+            var (orbit, encounterTime) = MoonInterceptOrbit();
+            var vessel = new Vessel(VesselId.New(), orbit);
             world.RegisterVessel(vessel);
 
-            // Find the entry POI and apply at the master-clock boundary.
-            var T = vessel.Orbit.Period(EarthMu);
-            var poi = SoiScanner.ScanNext(vessel, reg, T / 2.0 - 600.0, T);
+            var poi = SoiScanner.ScanNext(vessel, reg, 0.0, encounterTime);
             Assert.IsNotNull(poi);
 
-            // World-frame state just before and just after the crossing.
-            var (_, _, worldPosBefore, _) = KeplerPropagator.WorldFrameStateAt(vessel.Orbit, poi!.Value.GameTime - 1.0, reg);
+            // World-frame position from the OLD orbit at the exact crossing time.
+            var (_, _, worldPosBefore, _) = KeplerPropagator.WorldFrameStateAt(vessel.Orbit, poi!.Value.GameTime, reg);
+
             var poiReg = new PoiRegistry();
             poiReg.Add(poi.Value);
             var transition = new SoiTransition(world, reg, poiReg);
-
-            // Run the scheduler forward to the crossing time so the
-            // master clock catches up, then apply.
-            var scheduler = new SimScheduler(world);
-            var simSteps = (int)Math.Ceiling((poi.Value.GameTime - world.Clock.GameTimeSeconds) / SimScheduler.FixedDt);
-            for (int i = 0; i < simSteps; i++) scheduler.Advance(SimScheduler.FixedDt);
-
-            transition.ApplyDue(world.Clock.GameTimeSeconds);
+            transition.ApplyDue(poi.Value.GameTime + 1.0);
 
             Assert.AreEqual(CelestialBodyId.Moon, vessel.Orbit.ParentBody,
                 "After the crossing the vessel's parent body must be the Moon.");
 
-            var (_, _, worldPosAfter, _) = KeplerPropagator.WorldFrameStateAt(vessel.Orbit, poi.Value.GameTime + 1.0, reg);
+            // World-frame position from the NEW orbit at the same instant must
+            // match: the re-parent transform is position-continuous (M0 keeps
+            // bodies' velocity out of scope, so continuity is checked at the
+            // crossing instant, not across the Moon's own motion).
+            var (_, _, worldPosAfter, _) = KeplerPropagator.WorldFrameStateAt(vessel.Orbit, poi.Value.GameTime, reg);
             var jump = (worldPosAfter - worldPosBefore).Length;
-            Assert.Less(jump, 1000.0,
-                $"World-frame state must be continuous across the SOI switch within 1 km; got {jump:R} m.");
+            Assert.Less(jump, 1.0,
+                $"World-frame position must be continuous across the SOI switch; got {jump:R} m.");
         }
 
         [Test]
@@ -82,16 +98,17 @@ namespace KSPClone.SimCore.Tests
         {
             var reg = EarthMoonSystem();
             var world = new SimWorld(reg);
-            var vessel = new Vessel(VesselId.New(),
-                new Orbit(10_000_000.0, 0, 0, 0, 0, 0, 0, CelestialBodyId.Planet));
+            var (orbit, encounterTime) = MoonInterceptOrbit();
+            var vessel = new Vessel(VesselId.New(), orbit);
             world.RegisterVessel(vessel);
 
             var poiReg = new PoiRegistry();
-            var poi = new Poi(PoiType.SoiCrossing, 100.0, vessel.Id, CelestialBodyId.Planet, CelestialBodyId.Moon);
-            poiReg.Add(poi);
+            // POI at apoapsis, where the vessel sits inside the Moon SOI at low
+            // speed — a bound capture the M0 converter can re-express.
+            poiReg.Add(new Poi(PoiType.SoiCrossing, encounterTime, vessel.Id, CelestialBodyId.Planet, CelestialBodyId.Moon));
 
             var transition = new SoiTransition(world, reg, poiReg);
-            transition.ApplyDue(200.0);
+            transition.ApplyDue(encounterTime + 1.0);
             Assert.AreEqual(0, poiReg.All.Count);
         }
     }

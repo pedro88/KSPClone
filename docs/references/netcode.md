@@ -307,8 +307,38 @@ a moving target). Even then, prefer simulating both bodies in a shared bubble ov
    adaptive command buffer driven by a server buffer-health signal; redundant recent-input
    window per packet for loss tolerance (NET-6).
 6. **Optimise only if measured (§4).** Add delta-compression-against-acked-baseline + priority
-   accumulator + tuned quantization once bandwidth is a real constraint — not before. Explicitly
+   accumulator + tuned quantization once bandwidth becomes a real constraint — not before. Explicitly
    **skip lag compensation** (§6).
+
+## Implementation status (M0)
+
+M0 ships the wire-agnostic **data structures** (no transport yet — that lands in Slice 0.3 transport wiring). Specifically:
+
+- **Transport choice (deferred but documented):** LiteNetLib-class UDP library. The
+  M0 ticket explicitly excludes Unity high-level netcode (per ADR-0008). LiteNetLib
+  is community-standard, AOT-friendly, has both reliable and unreliable channels
+  built in, and no managed-code GC pressure on the hot path. The wire layer
+  lives in the `KSPClone.Server` assembly — never in SimCore (see ADR-0009).
+- **P-1 wire format (partially resolved):** pure full snapshots for now, no delta
+  compression. The `SnapshotEmitter` emits one `SnapshotBundle` per emission tick
+  with all vessel state inline. The `VesselSnapshot` record struct carries
+  `vesselId`, `gameTime`, `seq` (single emitter-wide counter), `position`,
+  `velocity`. Per-vessel seq and delta-against-acked-baseline arrive when the
+  prediction loop lands (Slice 1.2 / Slice 1.3) and bandwidth becomes a real
+  constraint — not before.
+- **Snapshot rate:** 25 Hz default (`SnapshotEmitter.DefaultRateHz = 25.0`,
+  configurable 20–30 Hz). At 25 Hz the client interpolation delay defaults to
+  100 ms (~2.5× the snapshot interval), matching the §3 "lose two packets" rule.
+- **World handshake:** the server sends a `WorldHandshakeMessage` immediately on
+  connect: the current `MasterClock.GameTimeSeconds` plus every vessel's full
+  `Orbit` (not the state vector — closed-form propagation makes the elements
+  strictly cheaper to ship, and lets the client evaluate future state itself
+  for free). The client populates a `ClientWorldModel` from the handshake.
+- **Netcode split:** the simulation core (`SimCore`) is wire-agnostic — no
+  UDP, no LiteNetLib, no UnityEngine. The transport layer ships these
+  messages on its unreliable channel. The `SnapshotEmitter.IConnectionSink`
+  interface is the seam: transport implements it, emitter doesn't know it's
+  UDP.
 
 ## Open questions for our case (feed plan P-1: wire/delta format)
 

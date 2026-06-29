@@ -3,6 +3,7 @@
     "rootNamespace": "KSPClone.SimCore.Tests",
     "references": [
         "KSPClone.SimCore",
+        "KSPClone.Net",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

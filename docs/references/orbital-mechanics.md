@@ -202,6 +202,18 @@ A maneuver node is a planned *POI*: at node time `t_n` we apply an instantaneous
 5. **Maneuver nodes (§6)** = evaluate state at node time, add Δv in the prograde/radial/normal triad, re-derive elements; expose Hohmann/plane-change/vis-viva helpers for planning and tests.
 6. **POI scan for TIME-4**: per vessel compute next SOI crossing / node / atmosphere-interface time analytically; the global min is the warp auto-limit. Validate end-to-end against KSP behaviour on a few known transfers (Kerbin→Mun).
 
+## Implementation status (M0)
+
+M0 ships the elliptic path of M001 (closed-form `KeplerPropagator.StateAt`) and the M002 inverse (`StateVectorToOrbit.Convert`). Universal variables and hyperbolic / parabolic support are deferred to a later slice per the open question in §3 — see ADR context.
+
+Concrete fixes and refinements applied during M0 (worth folding into the upstream pattern):
+
+- **`EccentricToTrueAnomaly` half-angle form** (more numerically stable than `2·atan2(√(1+e)·sinE, √(1−e)·cosE)`). Replace `sin(E)`, `cos(E)` with `sin(E/2)`, `cos(E/2)` — same formula, better conditioning near E ≈ π and E ≈ 0.
+- **Equatorial `argp` fallback** in `StateVectorToOrbit.Convert`. When the node vector is degenerate (inclination ≈ 0), `ω` is undefined; the conventional fix is to fold it into the longitude of periapsis measured from the x-axis, with a retrograde-orbit sign flip: `argp = atan2(eVec.Y, eVec.X) * (h.Z < 0 ? -1 : +1)`. Without this, every equatorial orbit gives NaN.
+- **`BodyRegistry.WorldPositionOf(Root, …)` short-circuit.** The root body (CelestialBodyId.Root) is the universe origin, never a stored entry in the registry — but the recursive lookup above tries to dereference it. Hard-coding `if (id == Root) return Vector3d.Zero;` at the top removes the off-by-one and a stack-overflow edge case.
+- **`BodyRegistry.AncestorsOf` truncation on missing ancestor.** Same root cause: if an ancestor body isn't in the registry (e.g. the chain ends at Root but Root is implicit), yield break instead of crashing.
+- **`KeplerPropagator.EccentricToTrueAnomaly`** is called from `BodyRegistry.WorldPositionOf` for parent-frame propagation; the seed `E0 = M` for low `e` and `E0 = π` for `e > 0.8` is the load-bearing detail that prevents the Newton solver from diverging on highly eccentric orbits.
+
 ## Open questions for our case
 
 - **Frame & handedness convention**: textbook right-handed z-up vs Unity left-handed y-up — fix one internal representation and convert only at the Unity/render boundary. Decide and document before any code.

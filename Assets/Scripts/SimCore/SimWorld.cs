@@ -1,3 +1,5 @@
+#nullable enable annotations
+
 using System;
 using System.Collections.Generic;
 
@@ -24,6 +26,13 @@ namespace KSPClone.SimCore
         {
             _vessels[vessel.Id] = vessel;
         }
+
+        /// <summary>
+        /// Remove a vessel from the world. Used by the docking merger
+        /// when an absorbed vessel is consolidated into its survivor
+        /// (PHYS-5).
+        /// </summary>
+        public bool UnregisterVessel(VesselId id) => _vessels.Remove(id);
 
         public void Tick(double dtSeconds)
         {

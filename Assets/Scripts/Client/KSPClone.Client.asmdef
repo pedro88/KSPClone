@@ -1,0 +1,17 @@
+{
+    "name": "KSPClone.Client",
+    "rootNamespace": "KSPClone.Client",
+    "references": [
+        "KSPClone.SimCore",
+        "KSPClone.Net"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

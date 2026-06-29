@@ -50,9 +50,12 @@ namespace KSPClone.SimCore.Tests
             world.RegisterVessel(vessel);
 
             var scheduler = new SimScheduler(world);
-            scheduler.Advance(123.0);
+            // Advance ~123s in frame-sized chunks: a single Advance(123) would hit
+            // the spiral-of-death clamp and only move game-time by MaxAdvanceSeconds.
+            for (int i = 0; i < 1230; i++) scheduler.Advance(0.1);
+            var t = world.Clock.GameTimeSeconds;
 
-            var (directPos, directVel) = KeplerPropagator.StateAt(vessel.Orbit, 123.0, EarthMoon());
+            var (directPos, directVel) = KeplerPropagator.StateAt(vessel.Orbit, t, EarthMoon());
             Assert.IsTrue(vessel.CachedWorldPosition.HasValue);
             Assert.IsTrue(vessel.CachedWorldVelocity.HasValue);
             Assert.AreEqual(0.0, (vessel.CachedWorldPosition.Value - directPos).Length, 1e-6);
@@ -67,8 +70,9 @@ namespace KSPClone.SimCore.Tests
             world.RegisterVessel(vessel);
 
             var scheduler = new SimScheduler(world);
-            // Advance 1 game-day without anyone connected.
-            for (int i = 0; i < 86400; i++) scheduler.Advance(1.0);
+            // Advance 1 game-day without anyone connected, in MaxAdvanceSeconds chunks
+            // (largest step that never trips the spiral-of-death clamp).
+            for (int i = 0; i < 345_600; i++) scheduler.Advance(SimScheduler.MaxAdvanceSeconds);
 
             Assert.AreEqual(86400.0, world.Clock.GameTimeSeconds, 1.0);
             Assert.AreEqual(86400.0, vessel.VesselClockSeconds, 1.0);
@@ -80,7 +84,7 @@ namespace KSPClone.SimCore.Tests
         public void PhysicsVessel_IsNotSynced_ByRailsLoop()
         {
             var world = new SimWorld(EarthMoon());
-            var vessel = new Vessel(VesselId.New(), SeedOrbit()) { OnRails = false };
+            var vessel = new Vessel(VesselId.New(), SeedOrbit()) { State = VesselState.ActivePhysics };
             world.RegisterVessel(vessel);
 
             var scheduler = new SimScheduler(world);
