@@ -93,5 +93,51 @@ namespace KSPClone.SimCore.Tests
             Assert.AreEqual(WarpState.Idle, sim.Warp.State);
             Assert.AreEqual(1.0, sim.World.Clock.Rate);
         }
+
+        // --- M1 composition (ADR-0014): the no-op stepper proves the tick
+        //     order and the promotion/demotion wiring without PhysX. ---
+
+        [Test]
+        public void PlayerLoad_PromotesSeedVessel_ToActivePhysicsInABubble_WithinOneTick()
+        {
+            var sim = NewSim();
+            // Mark the seed vessel as crewed so the demotion pass leaves it active.
+            sim.SetOccupancyLookup(_ => true);
+
+            PromotionEvent? promoted = null;
+            sim.Promotion.VesselPromoted += e => promoted = e;
+
+            sim.Promotion.RequestPlayerLoad(WorldSeed.SeedVesselId);
+            sim.Advance(1.0 / 60.0); // one fixed tick
+
+            var v = sim.World.Vessels[WorldSeed.SeedVesselId];
+            Assert.AreEqual(VesselState.ActivePhysics, v.State, "Player-load must promote the vessel.");
+            Assert.IsNotNull(v.BubbleId, "A promoted vessel lives in a bubble.");
+            Assert.IsTrue(sim.Bubbles.TryGet(v.BubbleId!.Value, out var bubble));
+            Assert.IsTrue(bubble.Contains(v.Id));
+            Assert.IsNotNull(promoted, "VesselPromoted must fire.");
+            Assert.AreEqual(PromotionReason.PlayerLoad, promoted!.Value.Reason);
+        }
+
+        [Test]
+        public void UnattendedWarpSafeVessel_PromotesThenDemotes_InTheSameTick()
+        {
+            var sim = NewSim();
+            // No occupancy override → vessel is unattended; with no thrust it is
+            // warp-safe, so the demotion pass returns it to on-rails the same tick.
+            bool didPromote = false, didDemote = false;
+            sim.Promotion.VesselPromoted += _ => didPromote = true;
+            sim.Demotion.VesselDemoted += _ => didDemote = true;
+
+            sim.Promotion.RequestPlayerLoad(WorldSeed.SeedVesselId);
+            sim.Advance(1.0 / 60.0);
+
+            Assert.IsTrue(didPromote, "Promotion still runs (step 2).");
+            Assert.IsTrue(didDemote, "An unattended warp-safe vessel demotes the same tick (step 5).");
+            var v = sim.World.Vessels[WorldSeed.SeedVesselId];
+            Assert.AreEqual(VesselState.OnRails, v.State);
+            Assert.IsNull(v.BubbleId);
+            Assert.AreEqual(0, sim.Bubbles.Count, "The emptied bubble is collected.");
+        }
     }
 }

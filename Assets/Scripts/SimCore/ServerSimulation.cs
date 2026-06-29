@@ -5,13 +5,18 @@ using System;
 namespace KSPClone.SimCore
 {
     /// <summary>
-    /// Engine-agnostic composition of the M0 server spine. Owns the
+    /// Engine-agnostic composition of the authoritative server spine. Owns the
     /// <see cref="SimWorld"/> and drives every per-tick subsystem in fixed-step
-    /// cadence: on-rails sync (via SimWorld), SOI re-parenting, warp auto-limit,
-    /// and snapshot emission — plus the warp-vote FSM, vote-membership sync, and
-    /// connection registry. The Unity host (<c>ServerBootstrap</c>) feeds it real
-    /// time via <see cref="Advance"/> and subscribes to its events (e.g. for
-    /// persistence). No transport, no engine references (Constitution Art. 1/2).
+    /// cadence (ADR-0014 §2):
+    ///
+    ///   SOI re-parent → promotion → clustering → <see cref="IBubbleStepper"/>
+    ///   → demotion → suspension → warp auto-limit → snapshot emission
+    ///
+    /// plus the warp-vote FSM, vote-membership sync, and connection registry.
+    /// The one engine-coupled step (active-physics integration) is injected as
+    /// an <see cref="IBubbleStepper"/> — the no-op default runs headless; the
+    /// Unity host supplies a PhysX adapter (ADR-0014 §1). No transport, no
+    /// engine references (Constitution Art. 1/2, ADR-0009).
     /// </summary>
     public sealed class ServerSimulation
     {
@@ -21,6 +26,18 @@ namespace KSPClone.SimCore
         public PoiRegistry Pois { get; }
         public WarpStateMachine Warp { get; }
         public SnapshotEmitter Snapshots { get; }
+
+        // --- M1 active-physics surface (ADR-0014) ---
+        public BubbleRegistry Bubbles { get; }
+        public BubbleManager BubbleManager { get; }
+        public PromotionController Promotion { get; }
+        public DemotionController Demotion { get; }
+        public SuspensionController Suspension { get; }
+        public SnapshotStore SuspendedSnapshots { get; }
+        /// <summary>Mass + engine specs by vessel id. Owned here (ADR-0016 craft-seed decision); populated by the host from the world seed; consumed by the injected <see cref="IBubbleStepper"/>.</summary>
+        public VesselMassRegistry Masses { get; }
+        public VesselEngineRegistry Engines { get; }
+
         public long TickCount => _scheduler.TickCount;
 
         /// <summary>Fired when a vessel re-parents at an SOI crossing (for persistence write-through).</summary>
@@ -34,11 +51,22 @@ namespace KSPClone.SimCore
         private readonly PoiScanner _poiScanner;
         private readonly SoiTransition _soiTransition;
         private readonly WarpAutoLimit _autoLimit;
+        private readonly WarpSafeEvaluator _warpSafe;
+        private readonly IBubbleStepper _stepper;
 
-        public ServerSimulation(SimWorld world, double snapshotRateHz = SnapshotEmitter.DefaultRateHz)
+        // Whether a vessel currently has a present crew member. Defaults to
+        // "unoccupied"; the control layer (ADR-0016) overrides it via
+        // SetOccupancyLookup so the leave → demote-or-suspend branch fires.
+        private Func<VesselId, bool> _occupancy = _ => false;
+
+        public ServerSimulation(
+            SimWorld world,
+            IBubbleStepper? stepper = null,
+            double snapshotRateHz = SnapshotEmitter.DefaultRateHz)
         {
             World = world ?? throw new ArgumentNullException(nameof(world));
             Bodies = world.Bodies ?? throw new ArgumentException("World must carry a BodyRegistry.", nameof(world));
+            _stepper = stepper ?? NullBubbleStepper.Instance;
 
             Connections = new ConnectionRegistry();
             Pois = new PoiRegistry();
@@ -51,6 +79,18 @@ namespace KSPClone.SimCore
             new WarpMembershipSync(Connections, Warp);
             Snapshots = new SnapshotEmitter(World, Connections, snapshotRateHz,
                 onBundle: b => SnapshotEmitted?.Invoke(b));
+
+            // M1 active-physics composition (ADR-0014 §2). Demotion takes a
+            // stable forwarder so a later SetOccupancyLookup is honoured.
+            Bubbles = new BubbleRegistry();
+            BubbleManager = new BubbleManager(Bubbles);
+            Promotion = new PromotionController(World, BubbleManager, Bubbles);
+            _warpSafe = new WarpSafeEvaluator();
+            Demotion = new DemotionController(World, Bubbles, _warpSafe, vid => _occupancy(vid));
+            SuspendedSnapshots = new SnapshotStore();
+            Suspension = new SuspensionController(World, Bubbles, SuspendedSnapshots, _warpSafe);
+            Masses = new VesselMassRegistry();
+            Engines = new VesselEngineRegistry();
 
             // Refresh POIs and arm the auto-limit each time a warp goes Active.
             Warp.WarpStarted += _ => { _poiScanner.RescanAll(); _autoLimit.Arm(); };
@@ -74,11 +114,28 @@ namespace KSPClone.SimCore
         /// <summary>Feed real elapsed seconds; runs the fixed 60 Hz step internally.</summary>
         public void Advance(double realSeconds) => _scheduler.Advance(realSeconds);
 
+        /// <summary>
+        /// Replace the occupancy predicate the demotion/suspension passes
+        /// consult (ADR-0016: wired to the control registry). A vessel that
+        /// returns true is treated as crewed and never demoted/suspended.
+        /// </summary>
+        public void SetOccupancyLookup(Func<VesselId, bool> lookup)
+            => _occupancy = lookup ?? throw new ArgumentNullException(nameof(lookup));
+
+        // The canonical per-tick order (ADR-0014 §2). Runs after SimWorld.Tick
+        // has advanced the master clock and synced on-rails caches.
         private void OnTick(double dtSeconds)
         {
-            _soiTransition.ApplyDue(World.Clock.GameTimeSeconds);
-            _autoLimit.Tick();
-            Snapshots.Tick(dtSeconds);
+            var now = World.Clock.GameTimeSeconds;
+
+            _soiTransition.ApplyDue(now);                  // 1. on-rails SOI re-parent (M0)
+            Promotion.RunPass(now);                        // 2. on-rails → active-physics
+            BubbleManager.RunClusteringPass(World.Vessels.Values); // 3. assign / merge / split bubbles
+            _stepper.Step(dtSeconds);                      // 4. active-physics integration (injected)
+            Demotion.RunPass();                            // 5. unattended + warp-safe → on-rails
+            Suspension.RunSuspensionPass(vid => _occupancy(vid)); // 6. unattended + not-safe → suspended
+            _autoLimit.Tick();                             // 7. warp auto-limit (M0)
+            Snapshots.Tick(dtSeconds);                     // 8. emit (sees post-physics, post-transition)
         }
 
         // --- Connection / warp surface for the transport layer ---
