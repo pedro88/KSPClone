@@ -172,13 +172,17 @@ namespace KSPClone.SimCore
         private bool PortsInTolerance(Vessel a, DockingPort pa, Vessel b, DockingPort pb)
         {
             if (!a.CachedLocalPosition.HasValue || !b.CachedLocalPosition.HasValue) return false;
-            // Note: in M1 we compare ports in world frame (the world positions are
-            // available via CachedWorldPosition on the host side; here we fall back
-            // to local assuming the bubble origin is similar — a future slice
-            // unifies via CachedWorldPosition).
+            // Capture frame is per-port, not per-vessel: the tolerance test must
+            // compare the ports' world positions, each offset from its vessel
+            // body by the port's LocalPosition (M1-T17 step 1). M1 approximates
+            // the vessel body frame by world axes (untumbled craft — same
+            // assumption as the thrust/attitude application in BubbleIntegrator);
+            // a later slice rotates LocalPosition by the vessel's orientation.
             var aWorld = a.CachedWorldPosition ?? a.CachedLocalPosition!.Value;
             var bWorld = b.CachedWorldPosition ?? b.CachedLocalPosition!.Value;
-            var relPos = bWorld - aWorld;
+            var aPort = aWorld + pa.LocalPosition;
+            var bPort = bWorld + pb.LocalPosition;
+            var relPos = bPort - aPort;
             if (relPos.Length > CaptureDistanceMeters) return false;
 
             // Axis alignment: pa.LocalAxis must point toward pb.LocalAxis

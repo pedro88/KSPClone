@@ -68,29 +68,56 @@ namespace KSPClone.SimCore
         /// available, return its position. If the render time is past
         /// the newest snapshot, extrapolate briefly using its velocity.
         /// </summary>
-        public Vector3d Sample(double serverGameTime)
+        public Vector3d Sample(double serverGameTime) => SampleState(serverGameTime).Position;
+
+        /// <summary>
+        /// Interpolated transform <b>and</b> velocity at
+        /// <paramref name="serverGameTime"/> (NET-4, M1-T13). Both are
+        /// linearly interpolated between the bracketing snapshots; past the
+        /// newest snapshot, position extrapolates along the held velocity.
+        /// </summary>
+        public InterpolatedState SampleState(double serverGameTime)
         {
             var renderTime = serverGameTime - InterpolationDelay;
-            if (Buffer.Count == 0) return Vector3d.Zero;
+            if (Buffer.Count == 0) return default;
 
             if (Buffer.Count == 1)
-                return Buffer.Snapshots[0].Position;
+            {
+                var only = Buffer.Snapshots[0];
+                return new InterpolatedState(only.Position, only.Velocity);
+            }
 
             if (!Buffer.TryBracket(renderTime, out var before, out var after))
             {
-                // Past the newest snapshot: extrapolate.
+                // Past the newest snapshot: extrapolate position, hold velocity.
                 var newest = Buffer.Snapshots[Buffer.Count - 1];
                 var dt = renderTime - newest.GameTime;
-                if (dt <= 0.0) return newest.Position;
-                return newest.Position + newest.Velocity * dt;
+                if (dt <= 0.0) return new InterpolatedState(newest.Position, newest.Velocity);
+                return new InterpolatedState(newest.Position + newest.Velocity * dt, newest.Velocity);
             }
 
-            if (before.GameTime >= after.GameTime) return before.Position;
+            if (before.GameTime >= after.GameTime)
+                return new InterpolatedState(before.Position, before.Velocity);
 
             var t = (renderTime - before.GameTime) / (after.GameTime - before.GameTime);
             if (t < 0.0) t = 0.0;
             if (t > 1.0) t = 1.0;
-            return before.Position * (1.0 - t) + after.Position * t;
+            return new InterpolatedState(
+                before.Position * (1.0 - t) + after.Position * t,
+                before.Velocity * (1.0 - t) + after.Velocity * t);
+        }
+    }
+
+    /// <summary>Interpolated render state: transform + velocity (NET-4).</summary>
+    public readonly struct InterpolatedState
+    {
+        public Vector3d Position { get; }
+        public Vector3d Velocity { get; }
+
+        public InterpolatedState(Vector3d position, Vector3d velocity)
+        {
+            Position = position;
+            Velocity = velocity;
         }
     }
 }

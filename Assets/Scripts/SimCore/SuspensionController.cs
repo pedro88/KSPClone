@@ -162,6 +162,7 @@ namespace KSPClone.SimCore
             vessel.CachedLocalVelocity = snap.LocalVelocity;
             vessel.CachedWorldPosition = bubble.GlobalOrigin + snap.LocalPosition;
             vessel.CachedWorldVelocity = snap.LocalVelocity;
+            vessel.CachedAngularVelocity = snap.AngularVelocity;
             vessel.ThrustActive = snap.WasThrustActive;
 
             bubble.Add(vessel.Id);
@@ -184,7 +185,7 @@ namespace KSPClone.SimCore
                 vesselClockAtSuspend: vessel.VesselClockSeconds,
                 localPosition: vessel.CachedLocalPosition.Value,
                 localVelocity: vessel.CachedLocalVelocity.Value,
-                angularVelocity: Vector3d.Zero, // M1: scalar velocity only
+                angularVelocity: vessel.CachedAngularVelocity ?? Vector3d.Zero,
                 orbitAtSuspend: vessel.Orbit,
                 wasThrustActive: vessel.ThrustActive,
                 parentBody: vessel.Orbit.ParentBody);
