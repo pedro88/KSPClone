@@ -19,17 +19,13 @@ namespace KSPClone.Server
 
         [SerializeField] private int _port = 9050;
 
-        // Flight-sandbox aid (not a spec behaviour): place the demo craft at
-        // rest just above the planet surface so it launches like a pad — real
-        // gravity (~9.8 m/s² at Earth radius, TWR≈1.2) pulls it down and the
-        // throttle lifts it. Zeroing the orbital velocity on promotion is what
-        // makes "at rest" possible. Turn off for a realistic orbital insertion.
+        // Flight-sandbox aid (not a spec behaviour): park the demo craft far
+        // enough out (~50 Earth radii) that gravity is ~0.004 m/s² — negligible
+        // — and zero its orbital velocity on promotion, so it begins genuinely
+        // at rest and stays put until you throttle. The client draws a visual
+        // launch pad under it. (A real surface launch with weight would need
+        // ground-collision, which the sim has not got yet.) Off → real orbit.
         [SerializeField] private bool _demoStartAtRest = true;
-
-        // Spawn altitude above the planet surface for the launch-pad sandbox
-        // (km). 0 = on the surface. NB: there is no ground collision — hold
-        // throttle to climb; cutting it lets the craft fall straight through.
-        [SerializeField] private double _demoStartAltitudeKm = 0.0;
 
         public ServerSimulation Sim { get; private set; }
 
@@ -86,16 +82,16 @@ namespace KSPClone.Server
             _transport?.Dispose();
         }
 
-        // Place the demo craft on the planet surface (circular element at
-        // R = Earth radius + altitude, positioned at that point now) and zero
-        // its orbital velocity the instant it promotes. Net: it sits at rest at
-        // ~9.8 m/s² gravity, so the throttle is a real launch. A sandbox initial
-        // condition, not an orbit; flip _demoStartAtRest off for the real seed.
+        // Park the demo craft on a circular element ~50 Earth radii out and
+        // zero its orbital velocity the instant it promotes. Gravity there is
+        // ~0.004 m/s² (negligible), so it floats at rest and the throttle is the
+        // only force you feel. A sandbox initial condition, not an orbit; flip
+        // _demoStartAtRest off for the real seed.
         private void ApplyDemoStartAtRest(SimWorld world)
         {
             if (world.Vessels.TryGetValue(WorldSeed.SeedVesselId, out var v))
             {
-                var r = WorldSeed.EarthRadius + _demoStartAltitudeKm * 1000.0;
+                var r = WorldSeed.EarthRadius * 50.0;
                 v.Orbit = new Orbit(
                     r, 0.0, 0.0, 0.0, 0.0, 0.0,
                     world.Clock.GameTimeSeconds, v.Orbit.ParentBody);

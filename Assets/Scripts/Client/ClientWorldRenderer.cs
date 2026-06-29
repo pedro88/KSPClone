@@ -17,7 +17,7 @@ namespace KSPClone.Client
     public sealed class ClientWorldRenderer
     {
         private readonly Dictionary<VesselId, GameObject> _objects = new();
-        private readonly Transform? _camera;
+        private Transform? _camera; // resolved lazily — Camera.main can be null at Start
 
         // Orbit camera: hold right mouse to swing around the controlled vessel,
         // scroll to zoom. Always looks at the craft. Seeded to a slight
@@ -25,8 +25,14 @@ namespace KSPClone.Client
         private float _camYaw;
         private float _camPitch = 15f;
         private float _camDistance = 18f;
-        private const float OrbitSpeed = 3f;
-        private const float ZoomSpeed = 3f;
+        private const float OrbitSpeed = 6f;
+        private const float ZoomSpeed = 4f;
+
+        // Attitude (RCS) jets: small blue cones that fire along the commanded
+        // pitch/yaw/roll axis while the pilot steers. Distinct from the orange
+        // main plume. Axis mapping follows the same untumbled render convention
+        // as the rest (pitch→X, yaw→Y, roll→Z in the render frame).
+        private readonly GameObject?[] _rcs = new GameObject?[3];
 
         // Static-world reference field ("space dust"): a lattice of markers
         // pinned to fixed world coordinates. The vessel anchors the render
@@ -60,7 +66,7 @@ namespace KSPClone.Client
             _camera = camera;
         }
 
-        public void Render(ClientFlightModel flight, double throttle = 0.0)
+        public void Render(ClientFlightModel flight, double throttle = 0.0, Vector3 attitude = default)
         {
             if (flight.ControlledVesselId is not { } controlled) return;
 
@@ -72,12 +78,54 @@ namespace KSPClone.Client
                 if (flight.TrySampleOther(id, out var world))
                     Place(id, flight.ToRenderLocal(world), isControlled: false);
 
+            OrientControlled(controlled, flight.ControlledState.Velocity);
             RenderGround(flight);
             RenderReferenceField(flight);
             RenderThrust(flight, throttle);
+            RenderRcs(flight, attitude);
 
+            // Camera.main may not have existed when this renderer was built;
+            // resolve it here so the orbit rig comes alive once it does.
+            _camera ??= Camera.main != null ? Camera.main.transform : null;
             if (_camera != null && _objects.TryGetValue(controlled, out var ctrlGo))
                 UpdateCamera(ctrlGo.transform.position);
+        }
+
+        private void RenderRcs(ClientFlightModel flight, Vector3 attitude)
+        {
+            EnsureRcs();
+            var c = flight.ToRenderLocal(flight.ControlledState.Position);
+            var center = new Vector3((float)c.X, (float)c.Y, (float)c.Z);
+            float[] cmd = { attitude.x, attitude.y, attitude.z };
+            Vector3[] ax = { Vector3.right, Vector3.up, Vector3.forward };
+
+            for (int i = 0; i < 3; i++)
+            {
+                var jet = _rcs[i]!;
+                bool on = Mathf.Abs(cmd[i]) > 0.001f;
+                jet.SetActive(on);
+                if (!on) continue;
+
+                var dir = ax[i] * Mathf.Sign(cmd[i]);
+                float len = 0.4f + 1.6f * Mathf.Clamp01(Mathf.Abs(cmd[i]) / 0.5f);
+                jet.transform.position = center + dir * (1.1f + len * 0.5f);
+                jet.transform.rotation = Quaternion.FromToRotation(Vector3.up, dir);
+                jet.transform.localScale = new Vector3(0.12f, len * 0.5f, 0.12f);
+            }
+        }
+
+        private void EnsureRcs()
+        {
+            for (int i = 0; i < _rcs.Length; i++)
+            {
+                if (_rcs[i] != null) continue;
+                var jet = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                jet.name = "RcsJet";
+                Object.Destroy(jet.GetComponent<Collider>());
+                jet.GetComponent<Renderer>().material.color = new Color(0.25f, 0.6f, 1f);
+                jet.SetActive(false);
+                _rcs[i] = jet;
+            }
         }
 
         // Mouse-orbit rig: right-drag rotates, wheel zooms, camera always
@@ -99,21 +147,25 @@ namespace KSPClone.Client
 
         private void RenderGround(ClientFlightModel flight)
         {
-            // Pad = wherever the craft first spawned.
-            _padWorld ??= flight.ControlledState.Position;
+            // Pad = the spawn point — but only once the predicted state has been
+            // reconciled to the real world position. Before the first snapshot
+            // ControlledState is Identity (origin), which would pin the pad to
+            // the planet centre ~3e8 m away and push it past the far clip.
+            if (_padWorld is null)
+            {
+                var p0 = flight.ControlledState.Position;
+                if (p0.LengthSquared < 1.0) return;
+                _padWorld = p0;
+            }
             EnsureGround();
 
-            var p = _padWorld.Value;
-            var local = flight.ToRenderLocal(p);
-            _ground!.transform.position = new Vector3((float)local.X, (float)local.Y, (float)local.Z);
-
-            // "Up" = radial away from the planet centre (world origin). The
-            // render frame is a pure translation, so world directions hold.
-            double m = p.Length;
-            var up = m > 1e-6
-                ? new Vector3((float)(p.X / m), (float)(p.Y / m), (float)(p.Z / m))
-                : Vector3.up;
-            _ground.transform.rotation = Quaternion.FromToRotation(Vector3.up, up);
+            // Horizontal in the render frame (normal = world +Y). Everything
+            // client-side treats +Y as up — the flame fires −Y, the orbit camera
+            // sits above on world-up — so the pad must match, or it shows
+            // edge-on and vanishes. Dropped ~1 m so the capsule rests on it.
+            var local = flight.ToRenderLocal(_padWorld.Value);
+            _ground!.transform.position = new Vector3((float)local.X, (float)local.Y - 1f, (float)local.Z);
+            _ground.transform.rotation = Quaternion.identity;
         }
 
         private void EnsureGround()
@@ -122,8 +174,8 @@ namespace KSPClone.Client
             _ground = GameObject.CreatePrimitive(PrimitiveType.Plane); // 10×10 m, normal +Y
             _ground.name = "LaunchPadGround";
             Object.Destroy(_ground.GetComponent<Collider>()); // presentation only (no contact)
-            _ground.transform.localScale = new Vector3(60f, 1f, 60f); // ~600 m square
-            _ground.GetComponent<Renderer>().material.color = new Color(0.22f, 0.24f, 0.28f);
+            _ground.transform.localScale = new Vector3(8f, 1f, 8f); // ~80 m square
+            _ground.GetComponent<Renderer>().material.color = new Color(0.40f, 0.44f, 0.52f);
         }
 
         private void RenderThrust(ClientFlightModel flight, double throttle)
@@ -134,9 +186,18 @@ namespace KSPClone.Client
             if (!firing) return;
 
             var c = flight.ToRenderLocal(flight.ControlledState.Position);
+            var center = new Vector3((float)c.X, (float)c.Y, (float)c.Z);
             float len = (float)(0.6 + 3.0 * throttle);     // plume length grows with throttle
-            // Capsule is ~2 m tall (±1 in Y); hang the plume just below it.
-            _flame.transform.position = new Vector3((float)c.X, (float)c.Y - 1f - len * 0.5f, (float)c.Z);
+
+            // Exhaust leaves the tail — opposite the velocity heading the
+            // capsule points along; upright (−Y) when at rest on the pad.
+            var vel = flight.ControlledState.Velocity;
+            Vector3 tail = vel.LengthSquared > 0.25
+                ? -new Vector3((float)vel.X, (float)vel.Y, (float)vel.Z).normalized
+                : Vector3.down;
+
+            _flame.transform.position = center + tail * (1f + len * 0.5f);
+            _flame.transform.rotation = Quaternion.FromToRotation(Vector3.up, tail);
             // Default cylinder is 2 m tall → scale Y by len/2 to get total length `len`.
             _flame.transform.localScale = new Vector3(0.35f, len * 0.5f, 0.35f);
         }
@@ -196,10 +257,54 @@ namespace KSPClone.Client
                 go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 go.name = $"ClientVessel_{id}";
                 Object.Destroy(go.GetComponent<Collider>()); // presentation only
-                go.GetComponent<Renderer>().material.color = isControlled ? Color.cyan : Color.gray;
+                var r = go.GetComponent<Renderer>();
+                r.material.color = isControlled ? Color.cyan : Color.gray;
+                // A banded texture gives the otherwise-featureless capsule a
+                // surface, so its orientation (and any roll) is actually legible.
+                r.material.mainTexture = BandedTexture();
                 _objects[id] = go;
             }
             go.transform.position = new Vector3((float)local.X, (float)local.Y, (float)local.Z);
+        }
+
+        // Orient the controlled capsule so its long axis (+Y) points along its
+        // velocity — the craft "flies nose-first". Falls back to upright when
+        // nearly at rest (on the pad). The client has no authoritative attitude,
+        // so velocity heading is the honest stand-in.
+        private void OrientControlled(VesselId id, Vector3d velocity)
+        {
+            if (!_objects.TryGetValue(id, out var go)) return;
+            if (velocity.LengthSquared > 0.25)
+            {
+                var d = new Vector3((float)velocity.X, (float)velocity.Y, (float)velocity.Z).normalized;
+                go.transform.rotation = Quaternion.FromToRotation(Vector3.up, d);
+            }
+            else
+            {
+                go.transform.rotation = Quaternion.identity;
+            }
+        }
+
+        private Texture2D? _bandTex;
+
+        private Texture2D BandedTexture()
+        {
+            if (_bandTex != null) return _bandTex;
+            const int s = 64;
+            var t = new Texture2D(s, s);
+            for (int y = 0; y < s; y++)
+                for (int x = 0; x < s; x++)
+                {
+                    // Horizontal bands + a checker so both pitch and roll read.
+                    bool band = (y / 8) % 2 == 0;
+                    bool check = ((x / 8) + (y / 8)) % 2 == 0;
+                    t.SetPixel(x, y, band
+                        ? new Color(0.95f, 0.95f, 1f)
+                        : (check ? new Color(0.2f, 0.5f, 0.7f) : new Color(0.1f, 0.3f, 0.5f)));
+                }
+            t.Apply();
+            _bandTex = t;
+            return t;
         }
 
         public void Clear()
@@ -212,6 +317,8 @@ namespace KSPClone.Client
             _dust.Clear();
             if (_flame != null) { Object.Destroy(_flame); _flame = null; }
             if (_ground != null) { Object.Destroy(_ground); _ground = null; }
+            for (int i = 0; i < _rcs.Length; i++)
+                if (_rcs[i] != null) { Object.Destroy(_rcs[i]); _rcs[i] = null; }
             _padWorld = null;
         }
     }

@@ -18,10 +18,32 @@ namespace KSPClone.Client
 
         private void Awake() => _client = GetComponent<ClientBootstrap>();
 
+        private Vector3d? _spawn;
+
         private void OnGUI()
         {
             var peer = _client != null ? _client.Peer : null;
             if (peer == null) return;
+
+            // Flight readout for the controlled vessel (predicted state).
+            var flight = _client.Flight;
+            if (flight.ControlledVesselId is not null && flight.ControlledState.Position.LengthSquared >= 1.0)
+            {
+                var pos = flight.ControlledState.Position;
+                var vel = flight.ControlledState.Velocity;
+                _spawn ??= pos;   // captured only once the position is real (reconciled)
+                double rmag = pos.Length;
+                var up = rmag > 1e-6 ? pos * (1.0 / rmag) : new Vector3d(0, 1, 0);
+                double vertical = Vector3d.Dot(vel, up);
+                double altitude = rmag - _spawn.Value.Length;   // height gained since launch
+
+                GUILayout.BeginArea(new Rect(10, 10, 240, 110), GUI.skin.box);
+                GUILayout.Label("== FLIGHT ==");
+                GUILayout.Label($"speed     : {vel.Length:F1} m/s");
+                GUILayout.Label($"vertical  : {vertical:+0.0;-0.0;0.0} m/s");
+                GUILayout.Label($"altitude  : {altitude:F0} m (since launch)");
+                GUILayout.EndArea();
+            }
 
             GUILayout.BeginArea(new Rect(Screen.width - 380, 10, 370, 420), GUI.skin.box);
 
