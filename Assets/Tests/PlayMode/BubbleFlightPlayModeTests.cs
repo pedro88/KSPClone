@@ -106,6 +106,30 @@ namespace KSPClone.PlayModeTests
                 $"Thrust delta-v must match Tsiolkovsky (expected ~{expected:F1} m/s, got {measured:F1}).");
         }
 
+        [UnityTest]
+        public IEnumerator EmptyPilot_SasAutomation_DampsAngularRate()
+        {
+            yield return null;
+
+            using var h = Build();
+            var crew = PlayerId.New();
+            h.Sim.OccupyStation(crew, WorldSeed.SeedVesselId, Station.Pilot); // promote
+            Tick(h.Sim, 1);
+
+            Assert.IsTrue(h.Bodies.TryGetBody(WorldSeed.SeedVesselId, out var body));
+            body.Body.angularVelocity = new Vector3(0f, 5f, 0f); // 5 rad/s spin
+
+            // Hot-swap to Engineer: Pilot is now empty (SAS takes over) but the
+            // vessel stays attended/active so it is not demoted.
+            h.Sim.OccupyStation(crew, WorldSeed.SeedVesselId, Station.Engineer);
+
+            Tick(h.Sim, 240); // 4 s of SAS damping
+
+            var w = h.Sim.World.Vessels[WorldSeed.SeedVesselId].CachedAngularVelocity!.Value;
+            Assert.Less(w.Length, 1.0,
+                $"Empty-Pilot SAS must damp the 5 rad/s spin below 1 rad/s within 4 s (got {w.Length:F3}).");
+        }
+
         // Run a single burn and return the controlled vessel's velocity change.
         private Vector3d RunBurn(float throttle, int ticks)
         {

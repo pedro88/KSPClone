@@ -74,7 +74,19 @@ namespace KSPClone.Server
 
             var body = RigidVesselFactory.Create(sceneOpt.Value, vesselId, bubbleId, localPos, localVel);
             var mass = _sim.Masses.Get(vesselId);
-            if (mass is not null) body.Body.mass = (float)Math.Max(mass.MassKg, 1.0);
+            if (mass is not null)
+            {
+                body.Body.mass = (float)Math.Max(mass.MassKg, 1.0);
+                // Set the inertia tensor explicitly: the body has no collider, so
+                // PhysX would otherwise use a unit default and the integrator's
+                // torque (scaled by these principal moments) would be massively
+                // over-applied — attitude control diverges to maxAngularVelocity.
+                body.Body.inertiaTensor = new Vector3(
+                    (float)Math.Max(mass.InertiaPrincipalX, 1e-3),
+                    (float)Math.Max(mass.InertiaPrincipalY, 1e-3),
+                    (float)Math.Max(mass.InertiaPrincipalZ, 1e-3));
+                body.Body.inertiaTensorRotation = Quaternion.identity;
+            }
             _bodies[vesselId] = body;
         }
 
