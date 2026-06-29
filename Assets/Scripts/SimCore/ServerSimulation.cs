@@ -43,6 +43,8 @@ namespace KSPClone.SimCore
         public InputChannel Inputs { get; }
         /// <summary>Pilot inputs dropped because the sender did not occupy the vessel's Pilot station (NET-1).</summary>
         public int RejectedPilotInputs { get; private set; }
+        /// <summary>Station inputs dropped because the sender did not occupy the station that owns the targeted system (CREW-1, Art. 6).</summary>
+        public int RejectedStationInputs { get; private set; }
 
         public long TickCount => _scheduler.TickCount;
 
@@ -215,6 +217,46 @@ namespace KSPClone.SimCore
                 return false;
             }
             return Inputs.Submit(input);
+        }
+
+        /// <summary>
+        /// Apply an input to one controllable system, gated by the station
+        /// partition (CREW-1, Art. 6): accepted only if the sender occupies the
+        /// station that owns <paramref name="system"/> (per <see cref="StationSystemMap"/>);
+        /// otherwise dropped and counted on <see cref="RejectedStationInputs"/>.
+        /// A Pilot seated player sending a Staging input is refused because
+        /// Pilot does not own Staging. Only systems with a live subsystem act
+        /// today (Throttle); the rest are accepted but inert until their
+        /// subsystem lands (Engineer staging, Navigator nodes — later slices).
+        /// </summary>
+        public bool SubmitStationInput(PlayerId player, VesselId vesselId, ControllableSystem system, double value = 0.0)
+        {
+            var owningStation = StationSystemMap.OwnerOf(system);
+            var occupant = Controls.Owner(vesselId, owningStation);
+            if (occupant is not { } o || !o.Equals(player))
+            {
+                RejectedStationInputs++;
+                return false;
+            }
+            if (!World.Vessels.TryGetValue(vesselId, out var vessel))
+            {
+                RejectedStationInputs++;
+                return false;
+            }
+
+            switch (system)
+            {
+                case ControllableSystem.Throttle:
+                    vessel.ThrottleCommand = value < 0.0 ? 0.0 : (value > 1.0 ? 1.0 : value);
+                    break;
+                // Attitude rides the Pilot's PilotInputMessage bundle (a 3-axis
+                // rate, not a scalar); other systems have no subsystem yet and
+                // are accepted-but-inert so the disjoint-routing contract holds
+                // before the subsystems exist.
+                default:
+                    break;
+            }
+            return true;
         }
     }
 }
