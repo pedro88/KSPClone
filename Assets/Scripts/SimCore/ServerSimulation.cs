@@ -52,7 +52,7 @@ namespace KSPClone.SimCore
         private readonly SoiTransition _soiTransition;
         private readonly WarpAutoLimit _autoLimit;
         private readonly WarpSafeEvaluator _warpSafe;
-        private readonly IBubbleStepper _stepper;
+        private IBubbleStepper _stepper;
 
         // Whether a vessel currently has a present crew member. Defaults to
         // "unoccupied"; the control layer (ADR-0016) overrides it via
@@ -121,6 +121,15 @@ namespace KSPClone.SimCore
         /// </summary>
         public void SetOccupancyLookup(Func<VesselId, bool> lookup)
             => _occupancy = lookup ?? throw new ArgumentNullException(nameof(lookup));
+
+        /// <summary>
+        /// Inject the engine-coupled integration step (ADR-0014 §1). The Unity
+        /// host calls this after building a <c>BubbleIntegrator</c> over this
+        /// simulation's <see cref="Bubbles"/>/<see cref="Engines"/>/<see cref="Masses"/>
+        /// registries (which exist only once the simulation is constructed).
+        /// </summary>
+        public void SetBubbleStepper(IBubbleStepper stepper)
+            => _stepper = stepper ?? throw new ArgumentNullException(nameof(stepper));
 
         // The canonical per-tick order (ADR-0014 §2). Runs after SimWorld.Tick
         // has advanced the master clock and synced on-rails caches.

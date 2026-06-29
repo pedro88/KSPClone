@@ -44,5 +44,33 @@ namespace KSPClone.SimCore
 
         /// <summary>Registers the seed vessel into a world (bootstrap callback for WorldRestorer).</summary>
         public static void Seed(SimWorld world) => world.RegisterVessel(CreateVessel());
+
+        // --- Demo-craft propulsion + mass (M1 Slice 1.6, ADR-0016) ---
+        // Flat spec until the M3 build system emits part trees. A single
+        // upper-stage-ish craft: ~5 t wet, one 60 kN / 300 s engine.
+
+        public const double SeedWetMassKg = 5_000.0;
+        public const double SeedPropellantKg = 3_000.0;
+        public const double SeedEngineThrustN = 60_000.0;
+        public const double SeedEngineIspS = 300.0;
+
+        /// <summary>Total mass + a diagonal inertia tensor for the seed vessel.</summary>
+        public static RigidVesselMass CreateMass() =>
+            new(SeedWetMassKg, ix: 8_000.0, iy: 8_000.0, iz: 8_000.0);
+
+        /// <summary>
+        /// The seed vessel's engine set: one main engine thrusting along
+        /// the vessel's local +Y, mounted below the centre of mass.
+        /// </summary>
+        public static EngineModule[] CreateEngines() => new[]
+        {
+            new EngineModule(
+                name: "main",
+                thrustNewtons: SeedEngineThrustN,
+                ispSeconds: SeedEngineIspS,
+                mountLocal: new Vector3d(0.0, -2.0, 0.0),
+                thrustDirLocal: new Vector3d(0.0, 1.0, 0.0),
+                propellantKg: SeedPropellantKg),
+        };
     }
 }
