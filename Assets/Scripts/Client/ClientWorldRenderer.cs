@@ -94,10 +94,16 @@ namespace KSPClone.Client
         private void RenderRcs(ClientFlightModel flight, Vector3 attitude)
         {
             EnsureRcs();
-            var c = flight.ToRenderLocal(flight.ControlledState.Position);
-            var center = new Vector3((float)c.X, (float)c.Y, (float)c.Z);
+            if (flight.ControlledVesselId is not { } cid || !_objects.TryGetValue(cid, out var cap))
+            {
+                foreach (var j in _rcs) j?.SetActive(false);
+                return;
+            }
+
+            var center = cap.transform.position;
+            var bodyRot = cap.transform.rotation; // capsule is velocity-aligned
             float[] cmd = { attitude.x, attitude.y, attitude.z };
-            Vector3[] ax = { Vector3.right, Vector3.up, Vector3.forward };
+            Vector3[] ax = { Vector3.right, Vector3.up, Vector3.forward }; // pitch→X, yaw→Y, roll→Z
 
             for (int i = 0; i < 3; i++)
             {
@@ -106,7 +112,9 @@ namespace KSPClone.Client
                 jet.SetActive(on);
                 if (!on) continue;
 
-                var dir = ax[i] * Mathf.Sign(cmd[i]);
+                // Jet direction is in the capsule's body frame, so the jets ride
+                // its (velocity) orientation instead of sticking out in world axes.
+                var dir = bodyRot * (ax[i] * Mathf.Sign(cmd[i]));
                 float len = 0.4f + 1.6f * Mathf.Clamp01(Mathf.Abs(cmd[i]) / 0.5f);
                 jet.transform.position = center + dir * (1.1f + len * 0.5f);
                 jet.transform.rotation = Quaternion.FromToRotation(Vector3.up, dir);
