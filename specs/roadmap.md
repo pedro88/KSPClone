@@ -92,8 +92,13 @@ Open decisions remaining (gating specific slices) are tracked at the bottom of t
 ## M2 — Multi-crew stations
 
 **Goal:** multiple players operate one vessel via disjoint stations; empty stations automate; disconnect degrades gracefully.
-**Exit:** CREW-1/2/3/4/5 live and verified.
+**Exit:** CREW-1/2/3/5 live and verified; **CREW-4 partial** (Pilot SAS hold live; Engineer auto-stage deferred — see Known gaps).
 **Demo:** three players board one vessel as Pilot/Engineer/Navigator; pilot flies, engineer stages, navigator sets a node — no conflicts; one disconnects, their station auto-takes-over; another reconnects and re-seats.
+
+**Known gaps (deferred, not bugs — each blocked on enabling work that does not exist yet; building it now would be an abstraction ahead of its code, against house style):**
+- **M2-T09 — Engineer auto-stage on flameout (CREW-4):** deferred post-M3. No staging model (stage grouping / staging subsystem) exists until the M3 part tree. `EngineerAutomation` is a no-op until then.
+- **M2-T08 — Pilot SAS hold target (CREW-4):** ships as angular-*rate* damping toward zero, not hold-to-a-captured-orientation, because SimCore carries no authoritative orientation field yet. Honest degradation; revisit when orientation is replicated.
+- **M2-T03 — typed `OccupyResult{Granted|Refused(StationTaken)}` returned to the client + winner/loser refusal logging (CREW-3):** the server already refuses contention deterministically (`ControlRegistry.Occupy` first-writer-wins, returns bool), but there is no client-facing result channel on the wire and no refusal log. Blocked on the open identity/join + wire-result decision (see open-decisions table).
 
 ### Slice 2.1 — Station occupancy
 - [x] T29 — Station model + occupy/vacate/hot-swap → player takes a free station, leaves, takes another (CREW-2)

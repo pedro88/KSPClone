@@ -33,9 +33,11 @@ namespace KSPClone.SimCore
     ///
     /// The map is a function system → station, so two stations can never own
     /// the same system: disjointness holds by construction. The static
-    /// constructor self-checks that every <see cref="ControllableSystem"/>
-    /// value is assigned (full coverage), so adding a system without mapping
-    /// it fails fast at load.
+    /// constructor still self-checks the derived per-station partition for
+    /// BOTH pairwise disjointness AND full coverage (M2-T04), so adding a
+    /// system without mapping it — or, in any partition fed to
+    /// <see cref="ValidatePartition"/>, assigning one to two stations — fails
+    /// fast.
     /// </summary>
     public static class StationSystemMap
     {
@@ -65,13 +67,33 @@ namespace KSPClone.SimCore
         public static IReadOnlyList<ControllableSystem> SystemsOf(Station station) => Systems[station];
 
         /// <summary>
-        /// Self-check (called at load): every <see cref="ControllableSystem"/>
-        /// is mapped to exactly one station. Throws if any is unmapped.
+        /// Self-check (called at load): the live partition is pairwise
+        /// disjoint and covers every <see cref="ControllableSystem"/>.
         /// </summary>
-        public static void Validate()
+        public static void Validate() => ValidatePartition(Systems);
+
+        /// <summary>
+        /// Assert that <paramref name="partition"/> assigns every
+        /// <see cref="ControllableSystem"/> to exactly one station (Art. 6):
+        /// no system owned by two stations (pairwise disjoint) and none left
+        /// unowned (full coverage). Throws <see cref="InvalidOperationException"/>
+        /// otherwise. Exposed so the partition contract is testable with a
+        /// deliberately-bad partition (M2-T04 acceptance).
+        /// </summary>
+        public static void ValidatePartition(IReadOnlyDictionary<Station, ControllableSystem[]> partition)
         {
+            var owner = new Dictionary<ControllableSystem, Station>();
+            foreach (var kv in partition)
+                foreach (var system in kv.Value)
+                {
+                    if (owner.TryGetValue(system, out var other))
+                        throw new InvalidOperationException(
+                            $"StationSystemMap partition is not disjoint: {system} is owned by both {other} and {kv.Key}.");
+                    owner[system] = kv.Key;
+                }
+
             foreach (ControllableSystem system in Enum.GetValues(typeof(ControllableSystem)))
-                if (!Owner.ContainsKey(system))
+                if (!owner.ContainsKey(system))
                     throw new InvalidOperationException(
                         $"StationSystemMap is incomplete: {system} is not assigned to a station.");
         }

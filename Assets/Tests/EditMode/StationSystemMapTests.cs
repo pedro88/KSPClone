@@ -58,5 +58,37 @@ namespace KSPClone.SimCore.Tests
         {
             Assert.DoesNotThrow(StationSystemMap.Validate);
         }
+
+        [Test]
+        public void ValidatePartition_Throws_WhenASystemIsOwnedByTwoStations()
+        {
+            // M2-T04 acceptance: "deliberately duplicating a system across two
+            // stations fails the check." Attitude assigned to both Pilot and
+            // Engineer → the disjointness assertion must throw.
+            var notDisjoint = new Dictionary<Station, ControllableSystem[]>
+            {
+                { Station.Pilot,     new[] { ControllableSystem.Attitude, ControllableSystem.Throttle } },
+                { Station.Engineer,  new[] { ControllableSystem.Attitude, ControllableSystem.Staging, ControllableSystem.Resources, ControllableSystem.Power, ControllableSystem.Abort } },
+                { Station.Navigator, new[] { ControllableSystem.ManeuverNode, ControllableSystem.MapPlanning } },
+            };
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => StationSystemMap.ValidatePartition(notDisjoint));
+            StringAssert.Contains("not disjoint", ex!.Message);
+        }
+
+        [Test]
+        public void ValidatePartition_Throws_WhenASystemIsUnowned()
+        {
+            // Coverage half of the self-check: drop Abort → must throw incomplete.
+            var incomplete = new Dictionary<Station, ControllableSystem[]>
+            {
+                { Station.Pilot,     new[] { ControllableSystem.Attitude, ControllableSystem.Throttle } },
+                { Station.Engineer,  new[] { ControllableSystem.Staging, ControllableSystem.Resources, ControllableSystem.Power } },
+                { Station.Navigator, new[] { ControllableSystem.ManeuverNode, ControllableSystem.MapPlanning } },
+            };
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => StationSystemMap.ValidatePartition(incomplete));
+            StringAssert.Contains("incomplete", ex!.Message);
+        }
     }
 }
