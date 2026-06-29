@@ -38,9 +38,11 @@ namespace KSPClone.SimCore
         public VesselMassRegistry Masses { get; }
         public VesselEngineRegistry Engines { get; }
 
-        // --- Crew / control (ADR-0016) ---
+        // --- Crew / control (ADR-0016, M2) ---
         public ControlRegistry Controls { get; }
         public InputChannel Inputs { get; }
+        /// <summary>Drives unoccupied stations from their automation fallback each tick (CREW-4).</summary>
+        public StationDriver Stations { get; }
         /// <summary>Pilot inputs dropped because the sender did not occupy the vessel's Pilot station (NET-1).</summary>
         public int RejectedPilotInputs { get; private set; }
         /// <summary>Station inputs dropped because the sender did not occupy the station that owns the targeted system (CREW-1, Art. 6).</summary>
@@ -102,6 +104,7 @@ namespace KSPClone.SimCore
 
             Controls = new ControlRegistry();
             Inputs = new InputChannel(World);
+            Stations = new StationDriver();
             // A vessel is "attended" iff any of its stations is occupied; the
             // demotion/suspension passes consult this via the forwarder above.
             SetOccupancyLookup(Controls.IsOccupied);
@@ -154,6 +157,7 @@ namespace KSPClone.SimCore
             _soiTransition.ApplyDue(now);                  // 1. on-rails SOI re-parent (M0)
             Promotion.RunPass(now);                        // 2. on-rails → active-physics
             BubbleManager.RunClusteringPass(World.Vessels.Values); // 3. assign / merge / split bubbles
+            Stations.Tick(World.Vessels.Values, Controls, dtSeconds); // 3b. automation fills unoccupied stations (CREW-4)
             _stepper.Step(dtSeconds);                      // 4. active-physics integration (injected)
             Demotion.RunPass();                            // 5. unattended + warp-safe → on-rails
             Suspension.RunSuspensionPass(vid => _occupancy(vid)); // 6. unattended + not-safe → suspended
