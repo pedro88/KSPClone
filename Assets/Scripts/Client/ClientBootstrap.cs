@@ -22,6 +22,7 @@ namespace KSPClone.Client
         public ClientFlightModel Flight { get; } = new();
 
         private LiteNetLibClientTransport _transport;
+        private ClientWorldRenderer _renderer;
 
         // Start (not Awake): if the server lives in the same scene, its Awake
         // has already started the listener by the time we connect here.
@@ -31,6 +32,7 @@ namespace KSPClone.Client
             Peer = new ClientNetPeer(_transport);
             Peer.HandshakeReceived += OnHandshake;
             Peer.SnapshotReceived += Flight.OnSnapshotBundle;
+            _renderer = new ClientWorldRenderer(Camera.main != null ? Camera.main.transform : null);
             _transport.Connect(_host, _port);
             Debug.Log($"[client] connecting to {_host}:{_port}");
         }
@@ -59,8 +61,14 @@ namespace KSPClone.Client
             if (msg.HasValue) Peer.SendPilotInput(msg.Value);
         }
 
+        private void LateUpdate()
+        {
+            _renderer?.Render(Flight);
+        }
+
         private void OnDestroy()
         {
+            _renderer?.Clear();
             _transport?.Dispose();
         }
     }

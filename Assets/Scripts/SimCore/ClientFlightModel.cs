@@ -29,6 +29,23 @@ namespace KSPClone.SimCore
         public double InterpolationDelay { get; set; } = 0.1;
         public long ClientTick => _clientTick;
 
+        /// <summary>The vessel ids currently interpolated (everything not controlled).</summary>
+        public IEnumerable<VesselId> InterpolatedVesselIds => _interpolators.Keys;
+
+        /// <summary>
+        /// The client render origin (ADR-0015): the controlled vessel's
+        /// predicted world position, so the controlled vessel renders at ~zero
+        /// in float and the camera rides its frame.
+        /// </summary>
+        public Vector3d RenderOrigin => ControlledState.Position;
+
+        /// <summary>
+        /// Convert a world-double position to the render-local frame. The
+        /// subtraction happens in doubles before any narrow to float — the
+        /// no-catastrophic-cancellation invariant (ADR-0012 §6).
+        /// </summary>
+        public Vector3d ToRenderLocal(Vector3d worldPosition) => worldPosition - RenderOrigin;
+
         private readonly IPredictionStep _step;
         private readonly ClientReconciler _reconciler;
         private readonly LatencyMonitor _latency;

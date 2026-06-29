@@ -98,5 +98,31 @@ namespace KSPClone.SimCore.Tests
             Assert.IsFalse(model.TrySampleOther(controlled, out _),
                 "The controlled vessel is predicted, never interpolated (prediction boundary).");
         }
+
+        [Test]
+        public void RenderOrigin_AnchorsOnControlledVessel_KeepingItAtZeroLocal()
+        {
+            var model = new ClientFlightModel();
+            var controlled = VesselId.New();
+            var other = VesselId.New();
+            model.Control(controlled);
+
+            // Place the controlled vessel far out in world doubles, an other
+            // vessel 1 km away. Render-local must stay tiny near the controlled.
+            var farWorld = new Vector3d(1.0e9, 0.0, 0.0);
+            model.OnSnapshotBundle(new SnapshotBundle(1.0, 1L, new List<VesselSnapshot>
+            {
+                new(controlled, 1.0, 1L, farWorld, Vector3d.Zero, Vector3d.Zero, 0L),
+                new(other,      1.0, 1L, farWorld + new Vector3d(1000.0, 0, 0), Vector3d.Zero, Vector3d.Zero, 0L),
+            }));
+
+            // Controlled sits at ~origin; the other is at its true 1 km offset.
+            var ctrlLocal = model.ToRenderLocal(model.ControlledState.Position);
+            Assert.AreEqual(0.0, ctrlLocal.Length, 1e-6, "Controlled vessel renders at the origin (ADR-0015).");
+
+            Assert.IsTrue(model.TrySampleOther(other, out var otherWorld));
+            var otherLocal = model.ToRenderLocal(otherWorld);
+            Assert.AreEqual(1000.0, otherLocal.X, 1e-3, "Other vessel keeps its real offset, computed in doubles.");
+        }
     }
 }
