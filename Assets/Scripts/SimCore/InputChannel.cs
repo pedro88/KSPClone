@@ -54,6 +54,9 @@ namespace KSPClone.SimCore
             // submitted field passes. Future station splits live here.
             vessel.ThrottleCommand = Clamp01(input.Throttle);
             vessel.AttitudeCommand = new Vector3d(input.PitchRate, input.YawRate, input.RollRate);
+            // Reconciliation ack (ADR-0013 §7): the highest input tick applied.
+            if (input.ClientTick > vessel.LastProcessedClientTick)
+                vessel.LastProcessedClientTick = input.ClientTick;
 
             if (!_buffer.TryGetValue(input.VesselId, out var q))
             {

@@ -104,6 +104,24 @@ namespace KSPClone.SimCore.Tests
         }
 
         [Test]
+        public void Submit_StampsLastProcessedClientTick_AsReconciliationAck()
+        {
+            var world = new SimWorld();
+            var vessel = MakeActiveVessel(world);
+            var channel = new InputChannel(world);
+
+            channel.Submit(new PilotInputMessage(vessel.Id, 5L, 0.5, 0, 0, 0));
+            Assert.AreEqual(5L, vessel.LastProcessedClientTick);
+
+            // Ack only advances; a stale (out-of-order) input never rewinds it.
+            channel.Submit(new PilotInputMessage(vessel.Id, 3L, 0.5, 0, 0, 0));
+            Assert.AreEqual(5L, vessel.LastProcessedClientTick);
+
+            channel.Submit(new PilotInputMessage(vessel.Id, 8L, 0.5, 0, 0, 0));
+            Assert.AreEqual(8L, vessel.LastProcessedClientTick);
+        }
+
+        [Test]
         public void SimCore_DoesNotReferenceUnityEngine()
         {
             using var _ = new NoUnityEngineAssertion();

@@ -71,6 +71,8 @@ namespace KSPClone.Net
                 w.Write(s.Seq);
                 WriteVector(w, s.Position);
                 WriteVector(w, s.Velocity);
+                WriteVector(w, s.AngularVelocity);
+                w.Write(s.LastProcessedClientTick);
             }
             return ms.ToArray();
         }
@@ -91,7 +93,9 @@ namespace KSPClone.Net
                 var s = r.ReadInt64();
                 var pos = ReadVector(r);
                 var vel = ReadVector(r);
-                vessels.Add(new VesselSnapshot(id, t, s, pos, vel));
+                var angVel = ReadVector(r);
+                var lastTick = r.ReadInt64();
+                vessels.Add(new VesselSnapshot(id, t, s, pos, vel, angVel, lastTick));
             }
             return new SnapshotBundle(gameTime, seq, vessels);
         }

@@ -40,6 +40,22 @@ namespace KSPClone.SimCore
         public Vector3d? CachedLocalVelocity { get; set; }
 
         /// <summary>
+        /// Most recent angular velocity (rad/s, world axes) of the active
+        /// rigid body, written back by the integrator each tick. Replicated
+        /// in the snapshot so the client reconciler resets the full predicted
+        /// state (ADR-0013 §8). Null while on-rails.
+        /// </summary>
+        public Vector3d? CachedAngularVelocity { get; set; }
+
+        /// <summary>
+        /// Highest pilot-input client tick the server has applied to this
+        /// vessel (the reconciliation ack — ADR-0013 §7). Stamped into every
+        /// snapshot so the client can reset to authoritative state and replay
+        /// only its still-unacked inputs. 0 until the first input is applied.
+        /// </summary>
+        public long LastProcessedClientTick { get; set; }
+
+        /// <summary>
         /// True if at least one of the vessel's engines is producing
         /// thrust this tick. Reported by the integrator; consulted by
         /// <see cref="WarpSafeEvaluator"/> to keep an active burn from

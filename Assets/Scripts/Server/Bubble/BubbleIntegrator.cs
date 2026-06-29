@@ -107,6 +107,9 @@ namespace KSPClone.Server
                 vessel.CachedLocalVelocity = ToVector3d(localVel);
                 vessel.CachedWorldPosition = worldPos;
                 vessel.CachedWorldVelocity = worldVel;
+                // Angular velocity is frame-independent (origin shifts are
+                // pure translations), so the local value is the world value.
+                vessel.CachedAngularVelocity = ToVector3d(rb.Body.angularVelocity);
             }
 
             // (4) Floating-origin rebase. The manager updates the bubble's
