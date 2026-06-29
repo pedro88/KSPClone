@@ -77,6 +77,22 @@ Snapshots and events both carry **global doubles** (or recomputed global = `bubb
 
 The reserved upgrade path: when active-vessel count × snapshot rate exceeds the bandwidth budget (call it "phase 2"), introduce per-packet entries where each entry may be flagged as a delta against `(seq − mostRecentAckedSeq)`. The priority accumulator, 5-bit baseline offset, and both-sides quantization rules from netcode reference §4 are already specified and need no new design work — only implementation, gated on a measurement. The phase-1 wire shape is a strict subset of the phase-2 wire shape; a phase-2 server emitting a mixed packet is correctly consumed by a phase-1 client (which ignores the delta entries and uses the full ones).
 
+## Addendum (M1 wiring): input-ack field and implementation status
+
+Two clarifications surfaced wiring the M1 predict/reconcile loop (see [ADR-0014](0014-fixed-tick-composition-and-physics-step-seam.md), [ADR-0016](0016-server-authoritative-station-occupancy.md)):
+
+### 7. Per-vessel `lastProcessedClientTick` — a *second*, distinct ack
+
+§2's `mostRecentAckedSeq` is a **client → server** ack: the highest *snapshot seq* the client has received, reserved for the phase-2 delta baseline. The reconciler (`ClientReconciler` / `ClientPredictor.Reconcile`) needs the **opposite-direction** ack: per controlled vessel, the highest *client input tick* the server has already applied, so the client can reset to authoritative state and replay only the still-unacked inputs. These are different fields in different directions; do not conflate them.
+
+The M1 `VesselSnapshot` therefore carries **`lastProcessedClientTick : int64`** in addition to the §1 fields. The server stores it on `Vessel` (set in `InputChannel.Submit` to the applied `input.ClientTick`) and the emitter stamps it per vessel. For vessels with no pilot input (on-rails, other players' craft) it is 0/unused.
+
+### 8. M1 implementation status vs the §1 record
+
+M0 shipped a reduced `VesselSnapshot` (vesselId, gameTime, seq, position, velocity). M1 brings the wire up to the §1 shape needed by the loop: it adds **`angularVelocity`** (so reconciliation resets the full `PredictedVesselState` — position, velocity, angular velocity, ack — rather than zeroing angular state every ~40 ms) and `lastProcessedClientTick` (§7). `orientation`, `flags`, and `bubbleId` from §1 land as the discrete-event surface (§5) and full-3D client need them; M1 may ship them incrementally.
+
+Note a deliberate asymmetry: `PredictedVesselState` carries **no orientation quaternion** — only angular velocity. So the controlled vessel's *attitude* is integrated client-side from angular velocity (not reconciled against an authoritative quaternion), while non-controlled vessels interpolate the wire `orientation` directly. Absolute-attitude reconciliation is a known deferred seam, acceptable while attitude divergence stays small over the reconciliation window.
+
 ## Satisfies
 
 NET-5 (snapshots at 20–30 Hz) by fixing the 25 Hz shape. NET-6 (≤ 150 ms RTT smoothness) by fixing the unreliable-sequenced channel + interpolation buffer sizing. PHYS-6 (discrete structural failure) by giving it a dedicated reliable-ordered event tag rather than smuggling it through a snapshot delta. PHYS-5 (docking without authority handoff) by making `BubbleMerged` and `Docked` reliable-ordered events that clients always observe before any post-merge snapshot.

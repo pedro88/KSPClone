@@ -112,7 +112,11 @@ A cluster of vessels close enough to interact physically, simulated together by 
 _Avoid_: physics range, loaded scene
 
 **Floating origin**:
-The local coordinate origin of a physics bubble, kept near its vessels so float precision holds at large world distances (prevents the "kraken"). Each bubble has its own.
+The local coordinate origin of a physics bubble, kept near its vessels so float precision holds at large world distances (prevents the "kraken"). Each bubble has its own. *Server-side*, double-anchored and rebased in discrete steps (ADR-0012).
+
+**Client render origin**:
+The client's single presentation-only origin, re-anchored every frame on the controlled vessel's predicted world position; every rendered vessel's Unity transform is `(float)(worldDouble − renderOrigin)`. Distinct from the server's per-bubble floating origin: ephemeral, re-derived each frame, never authoritative, and no discrete rebase events. The camera rides the controlled vessel's float-local frame — no scaled space (ADR-0015).
+_Avoid_: floating origin (that's the server, per-bubble concept)
 
 **Promotion / demotion**:
 A vessel *promotes* from on-rails to active-physics when a player loads or approaches it, or two vessels close within physics range (forming/joining a bubble). It *demotes* back to on-rails when warp-safe and unattended. Because two converging vessels share a bubble *before* contact, docking needs no cross-machine authority handoff.
@@ -135,7 +139,7 @@ The server-side record of one connected player (`PlayerSession`). In M0 it carri
 The message the server sends to a client immediately on connect (`WorldHandshakeMessage`): the current `MasterClock.GameTimeSeconds` plus every vessel's orbital elements. Lets the client list the vessel and display game-time without waiting for the first snapshot.
 
 **Snapshot**:
-A periodic authoritative read of one vessel's state at a server-tick — `VesselSnapshot` carries `vesselId`, `gameTime`, `seq`, `position`, `velocity`. The server emits snapshots in bundles (`SnapshotBundle`) at 25 Hz by default (configurable 20–30 Hz), decoupled from the 60 Hz sim tick (NET-5 / ADR-0006).
+A periodic authoritative read of one vessel's state at a server-tick — `VesselSnapshot` carries `vesselId`, `gameTime`, `seq`, `position`, `velocity`, `angularVelocity`, and `lastProcessedClientTick` (the highest pilot-input tick the server has applied to this vessel — the ack the client's reconciler replays from). The server emits snapshots in bundles (`SnapshotBundle`) at 25 Hz by default (configurable 20–30 Hz), decoupled from the 60 Hz sim tick (NET-5 / ADR-0006).
 
 **Snapshot bundle**:
 The per-emission collection of vessel snapshots stamped with a single shared `gameTime` and `seq`. One bundle per emitter tick.
