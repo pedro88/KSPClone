@@ -38,6 +38,12 @@ namespace KSPClone.SimCore
         public VesselMassRegistry Masses { get; }
         public VesselEngineRegistry Engines { get; }
 
+        // --- Crew / control (ADR-0016) ---
+        public ControlRegistry Controls { get; }
+        public InputChannel Inputs { get; }
+        /// <summary>Pilot inputs dropped because the sender did not occupy the vessel's Pilot station (NET-1).</summary>
+        public int RejectedPilotInputs { get; private set; }
+
         public long TickCount => _scheduler.TickCount;
 
         /// <summary>Fired when a vessel re-parents at an SOI crossing (for persistence write-through).</summary>
@@ -91,6 +97,12 @@ namespace KSPClone.SimCore
             Suspension = new SuspensionController(World, Bubbles, SuspendedSnapshots, _warpSafe);
             Masses = new VesselMassRegistry();
             Engines = new VesselEngineRegistry();
+
+            Controls = new ControlRegistry();
+            Inputs = new InputChannel(World);
+            // A vessel is "attended" iff any of its stations is occupied; the
+            // demotion/suspension passes consult this via the forwarder above.
+            SetOccupancyLookup(Controls.IsOccupied);
 
             // Refresh POIs and arm the auto-limit each time a warp goes Active.
             Warp.WarpStarted += _ => { _poiScanner.RescanAll(); _autoLimit.Arm(); };
@@ -156,10 +168,53 @@ namespace KSPClone.SimCore
             return (session, handshake);
         }
 
-        public bool Disconnect(PlayerId id) => Connections.Remove(id);
+        public bool Disconnect(PlayerId id)
+        {
+            // Vacating leaves the vessel unattended, so the next tick routes it
+            // to demotion (warp-safe) or suspension (not) — CONTEXT: Occupying.
+            Controls.Vacate(id);
+            return Connections.Remove(id);
+        }
 
         public bool RequestWarp(WarpRequest request) => Warp.RequestWarp(request);
 
         public void ApproveWarp(PlayerId id) => Warp.Approve(id);
+
+        // --- Crew / control surface for the transport layer (ADR-0016) ---
+
+        /// <summary>
+        /// Occupy a station of a vessel. Occupying the <see cref="Station.Pilot"/>
+        /// seat triggers the vessel's transition into active physics — promotion
+        /// for an on-rails vessel, resume for a suspended one. Returns false if
+        /// the vessel is unknown or the station is already held by another player.
+        /// </summary>
+        public bool OccupyStation(PlayerId player, VesselId vessel, Station station)
+        {
+            if (!World.Vessels.TryGetValue(vessel, out var v)) return false;
+            if (!Controls.Occupy(player, vessel, station)) return false;
+
+            if (station == Station.Pilot)
+            {
+                if (v.State == VesselState.Suspended) Suspension.Resume(vessel);
+                else if (v.State == VesselState.OnRails) Promotion.RequestPlayerLoad(vessel);
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Apply a pilot input authoritatively (NET-1). Accepted only from the
+        /// player occupying the vessel's Pilot station; otherwise dropped and
+        /// counted on <see cref="RejectedPilotInputs"/>.
+        /// </summary>
+        public bool SubmitPilotInput(PlayerId player, PilotInputMessage input)
+        {
+            var owner = Controls.Owner(input.VesselId, Station.Pilot);
+            if (owner is not { } o || !o.Equals(player))
+            {
+                RejectedPilotInputs++;
+                return false;
+            }
+            return Inputs.Submit(input);
+        }
     }
 }

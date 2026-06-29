@@ -106,6 +106,8 @@ namespace KSPClone.Net
             w.Write((byte)cmd.Type);
             w.Write(cmd.Multiplier);
             w.Write((int)cmd.Kind);
+            WriteVesselId(w, cmd.VesselId); // OccupyStation payload (zero/ignored for warp)
+            w.Write((int)cmd.Station);
             return ms.ToArray();
         }
 
@@ -117,7 +119,9 @@ namespace KSPClone.Net
             var type = (ClientCommandType)r.ReadByte();
             var multiplier = r.ReadDouble();
             var kind = (WarpKind)r.ReadInt32();
-            return new ClientCommand(type, multiplier, kind);
+            var vesselId = ReadVesselId(r);
+            var station = (Station)r.ReadInt32();
+            return new ClientCommand(type, multiplier, kind, vesselId, station);
         }
 
         // ---- client → server: pilot input (M1-T08) ----
