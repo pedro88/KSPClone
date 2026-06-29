@@ -23,6 +23,7 @@ namespace KSPClone.Server
     /// instances within the same bubble.
     /// </summary>
     [DisallowMultipleComponent]
+    [RequireComponent(typeof(Rigidbody))]
     public sealed class RigidVesselBody : MonoBehaviour
     {
         public VesselId VesselId { get; private set; }
