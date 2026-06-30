@@ -22,7 +22,9 @@ namespace KSPClone.Client
         public ClientFlightModel Flight { get; } = new();
 
         private LiteNetLibClientTransport _transport;
+        private ClientNetPeer _peer;
         private ClientWorldRenderer _renderer;
+        private CelestialSkyboxRenderer _skybox;
         private float _lastThrottle;
         private Vector3 _lastAttitude;
 
@@ -35,6 +37,7 @@ namespace KSPClone.Client
             Peer.HandshakeReceived += OnHandshake;
             Peer.SnapshotReceived += Flight.OnSnapshotBundle;
             _renderer = new ClientWorldRenderer(Camera.main != null ? Camera.main.transform : null);
+            _skybox = new CelestialSkyboxRenderer(Camera.main != null ? Camera.main.transform : null);
             _transport.Connect(_host, _port);
             Debug.Log($"[client] connecting to {_host}:{_port}");
         }
@@ -69,11 +72,30 @@ namespace KSPClone.Client
         private void LateUpdate()
         {
             _renderer?.Render(Flight, _lastThrottle, _lastAttitude);
+            // Skybox rides the same float-local frame as the renderer; the
+            // controlled vessel anchors the camera, so bodies' world positions
+            // resolve to local directions on the inverted-sphere shell.
+            // The seed BodyRegistry is reconstructed client-side from
+            // WorldSeed (deterministic — PERSIST-3); future custom-body systems
+            // will need it serialised in the handshake.
+            if (_skybox != null && Flight.ControlledVesselId is not null)
+            {
+                var cam = Camera.main;
+                if (cam != null)
+                {
+                    var pos = Flight.ControlledState.Position;
+                    var bodies = WorldSeed.CreateBodies();
+                    var sunDir = (Vector3d)bodies.WorldPositionOf(CelestialBodyId.Sun, Flight.ServerGameTime)
+                                 - (Vector3d)pos;
+                    _skybox.Render(bodies, pos, Flight.ServerGameTime, sunDir);
+                }
+            }
         }
 
         private void OnDestroy()
         {
             _renderer?.Clear();
+            _skybox?.Clear();
             _transport?.Dispose();
         }
     }
