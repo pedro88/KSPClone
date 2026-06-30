@@ -3,26 +3,34 @@ using System;
 namespace KSPClone.SimCore
 {
     /// <summary>
-    /// Deterministic M0 world seed: an Earth–Moon system plus one vessel on a
-    /// transfer orbit whose apoapsis meets the Moon's SOI, so the warp
+    /// Deterministic M0 world seed: a Sun–Earth–Moon system plus one vessel on
+    /// a transfer orbit whose apoapsis meets the Moon's SOI, so the warp
     /// auto-limit has a real POI to stop on. Deterministic (fixed vessel id,
     /// fixed elements) so a restored world matches the seeded one (PERSIST-3).
     /// </summary>
     public static class WorldSeed
     {
+        public const double SunMu           = 1.32712440018e20;
+        public const double SunRadius       = 6.957e8;
         public const double EarthMu         = 3.986004418e14;
         public const double MoonMu          = 4.9048695e12;
         public const double EarthRadius     = 6_371_000.0;
         public const double EarthSoiRadius  = 924_000_000.0;
         public const double MoonOrbitRadius = 384_400_000.0;
         public const double MoonSoiRadius   = 66_100_000.0;
+        public const double EarthOrbitRadius = 1.495978707e11;
 
         public static readonly VesselId SeedVesselId =
             new(new Guid("00000000-0000-0000-0000-000000000001"));
 
         public static BodyRegistry CreateBodies() => new(new[]
         {
-            new CelestialBody(CelestialBodyId.Planet, "Earth", EarthMu, EarthSoiRadius, CelestialBodyId.Root),
+            // Sun anchors the system at the Root sentinel; it never acts as a
+            // SOI target for vessels, so its SOI is effectively unbounded
+            // (no vessel will ever reach it on rails). +∞ is the sentinel.
+            new CelestialBody(CelestialBodyId.Sun, "Sun", SunMu, double.PositiveInfinity, CelestialBodyId.Root),
+            new CelestialBody(CelestialBodyId.Planet, "Earth", EarthMu, EarthSoiRadius, CelestialBodyId.Sun,
+                new Orbit(EarthOrbitRadius, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Sun)),
             new CelestialBody(CelestialBodyId.Moon, "Moon", MoonMu, MoonSoiRadius, CelestialBodyId.Planet,
                 new Orbit(MoonOrbitRadius, 0.0, 0, 0, 0, 0, 0, CelestialBodyId.Planet)),
         });
