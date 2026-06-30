@@ -24,9 +24,13 @@ namespace KSPClone.SimCore
         /// Returns (position, velocity) in the parent body's inertial
         /// frame at <paramref name="gameTime"/>. μ is resolved from
         /// <paramref name="registry"/> via <see cref="Orbit.ParentBody"/>.
-        /// The caller is responsible for offsetting by the parent's world
-        /// position if a world-frame vector is required — see
-        /// <see cref="WorldFrameStateAt"/> for the convenience wrapper.
+        ///
+        /// ⚠ PARENT-FRAME ONLY — DO NOT use for world-frame queries.
+        /// For any comparison against another body's world position
+        /// (SOI scans, distance checks, ray casts), call
+        /// <see cref="WorldFrameStateAt"/> and read the world-frame
+        /// element. Mixing the two silently misbehaves whenever a parent
+        /// body is not at the world origin (ADR-0017).
         /// </summary>
         public static (Vector3d position, Vector3d velocity) StateAt(Orbit orbit, double gameTime, BodyRegistry registry)
         {

@@ -87,11 +87,11 @@ namespace KSPClone.SimCore
 
         private static double DistanceMinusSoi(Vessel vessel, BodyRegistry registry, CelestialBody target, double t)
         {
-            // World-frame position of the vessel (parent world pos + parent-frame
-            // state). StateAt alone would return the parent-frame position, which
-            // is only equal to world-frame when the parent sits at the origin —
-            // true under the M0-T06 static tree, no longer true once Earth
-            // orbits the Sun (M2-T12).
+            // World-frame position of the vessel — see ADR-0017. Using
+            // KeplerPropagator.StateAt here returns the *parent-frame* position
+            // and would silently misreport the crossing the moment any parent
+            // body moves (the SOI scanner broke on M2-T12 when Earth got an
+            // orbit around the Sun, off by 1 AU).
             var (_, _, vesselWorldPos, _) = KeplerPropagator.WorldFrameStateAt(vessel.Orbit, t, registry);
             var targetPos = registry.WorldPositionOf(target.Id, t);
             return (vesselWorldPos - targetPos).Length - target.SoiRadius;

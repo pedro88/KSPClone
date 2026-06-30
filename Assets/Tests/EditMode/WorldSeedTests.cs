@@ -71,5 +71,35 @@ namespace KSPClone.SimCore.Tests
             Assert.AreEqual(CelestialBodyId.Planet, vessel.Orbit.ParentBody,
                 "Vessel orbits Earth; the new Sun tier must not change that.");
         }
+
+        // Regression: parent-frame and world-frame Kepler state must differ by
+        // exactly Earth's world position once Earth carries an orbit around
+        // the Sun. Before M2-T12 they coincided (Earth static at origin); this
+        // test catches any future refactor that re-introduces the footgun by
+        // routing callers to StateAt for a world-frame query (ADR-0017).
+        [Test]
+        public void StateAt_AndWorldFrameStateAt_DifferByEarthWorldPosition()
+        {
+            var reg = WorldSeed.CreateBodies();
+            var vessel = WorldSeed.CreateVessel();
+            var t = 1.0e6; // arbitrary non-zero game-time
+
+            var (parentFramePos, _) = KeplerPropagator.StateAt(vessel.Orbit, t, reg);
+            var (_, _, worldPos, _) = KeplerPropagator.WorldFrameStateAt(vessel.Orbit, t, reg);
+            var earthWorldPos = reg.WorldPositionOf(CelestialBodyId.Planet, t);
+
+            var expectedOffset = earthWorldPos;
+            var actualOffset = worldPos - parentFramePos;
+
+            // The two should agree exactly (closed-form identity, not a
+            // tolerance check). A failure here means someone broke the
+            // frame relationship again.
+            Assert.AreEqual(0.0, (actualOffset - expectedOffset).Length, 1e-9,
+                "worldPos == parentFramePos + parentWorldPos (ADR-0017).");
+            // Sanity: they must NOT coincide anymore (Earth is no longer
+            // at origin).
+            Assert.Greater(actualOffset.Length, 1.0,
+                "Earth orbits the Sun: the two frames must differ at non-zero t.");
+        }
     }
 }
