@@ -70,7 +70,7 @@ namespace KSPClone.Client
                 double distance = toBody.Length;
                 if (distance < 1.0) continue; // degenerate: camera inside the body
 
-                var dir = (Vector3)(toBody / distance); // safe: distance > 1
+                var dir = new Vector3((float)(toBody.X / distance), (float)(toBody.Y / distance), (float)(toBody.Z / distance));
                 double realAngularRadius = ComputeRealAngularRadius(kv.Key, distance);
                 float apparentAngularRadius = Mathf.Max(
                     (float)realAngularRadius, MinAngularRadiusRad);
@@ -100,7 +100,7 @@ namespace KSPClone.Client
                 var mr = moon.Disk.GetComponent<Renderer>();
                 if (mr != null && mr.material != null)
                 {
-                    var sun = (Vector3)sunDirectionWorld;
+                    var sun = new Vector3((float)sunDirectionWorld.X, (float)sunDirectionWorld.Y, (float)sunDirectionWorld.Z);
                     mr.material.SetVector("_SunDir",
                         new Vector4(sun.x, sun.y, sun.z, 0));
                 }

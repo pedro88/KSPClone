@@ -87,9 +87,14 @@ namespace KSPClone.SimCore
 
         private static double DistanceMinusSoi(Vessel vessel, BodyRegistry registry, CelestialBody target, double t)
         {
-            var (vesselPos, _) = KeplerPropagator.StateAt(vessel.Orbit, t, registry);
+            // World-frame position of the vessel (parent world pos + parent-frame
+            // state). StateAt alone would return the parent-frame position, which
+            // is only equal to world-frame when the parent sits at the origin —
+            // true under the M0-T06 static tree, no longer true once Earth
+            // orbits the Sun (M2-T12).
+            var (_, _, vesselWorldPos, _) = KeplerPropagator.WorldFrameStateAt(vessel.Orbit, t, registry);
             var targetPos = registry.WorldPositionOf(target.Id, t);
-            return (vesselPos - targetPos).Length - target.SoiRadius;
+            return (vesselWorldPos - targetPos).Length - target.SoiRadius;
         }
 
         private static double? BisectRoot(Vessel vessel, BodyRegistry registry, CelestialBody target, double a, double b)

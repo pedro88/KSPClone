@@ -42,7 +42,7 @@ namespace KSPClone.SimCore.Tests
         {
             var reg = WorldSeed.CreateBodies();
             var earthPos = reg.WorldPositionOf(CelestialBodyId.Planet, 0.0);
-            Assert.AreEqual(WorldSeed.EarthOrbitRadius, earthPos.Magnitude, 1e-6);
+            Assert.AreEqual(WorldSeed.EarthOrbitRadius, earthPos.Length, 1e-6);
         }
 
         [Test]
@@ -59,7 +59,7 @@ namespace KSPClone.SimCore.Tests
             Assert.AreEqual(0.0, moonPos.Z, 1e-6);
             // The Moon's offset from Earth is exactly one MoonOrbitRadius along +x.
             var offset = moonPos - earthPos;
-            Assert.AreEqual(WorldSeed.MoonOrbitRadius, offset.Magnitude, 1e-6);
+            Assert.AreEqual(WorldSeed.MoonOrbitRadius, offset.Length, 1e-6);
         }
 
         [Test]
