@@ -72,6 +72,7 @@ namespace KSPClone.Net
                 WriteVector(w, s.Position);
                 WriteVector(w, s.Velocity);
                 WriteVector(w, s.AngularVelocity);
+                WriteQuaternion(w, s.Orientation);
                 w.Write(s.LastProcessedClientTick);
             }
             return ms.ToArray();
@@ -94,8 +95,9 @@ namespace KSPClone.Net
                 var pos = ReadVector(r);
                 var vel = ReadVector(r);
                 var angVel = ReadVector(r);
+                var orient = ReadQuaternion(r);
                 var lastTick = r.ReadInt64();
-                vessels.Add(new VesselSnapshot(id, t, s, pos, vel, angVel, lastTick));
+                vessels.Add(new VesselSnapshot(id, t, s, pos, vel, angVel, orient, lastTick));
             }
             return new SnapshotBundle(gameTime, seq, vessels);
         }
@@ -170,6 +172,14 @@ namespace KSPClone.Net
 
         private static Vector3d ReadVector(BinaryReader r) =>
             new(r.ReadDouble(), r.ReadDouble(), r.ReadDouble());
+
+        private static void WriteQuaternion(BinaryWriter w, Quaterniond q)
+        {
+            w.Write(q.X); w.Write(q.Y); w.Write(q.Z); w.Write(q.W);
+        }
+
+        private static Quaterniond ReadQuaternion(BinaryReader r) =>
+            new(r.ReadDouble(), r.ReadDouble(), r.ReadDouble(), r.ReadDouble());
 
         private static void WriteOrbit(BinaryWriter w, Orbit o)
         {

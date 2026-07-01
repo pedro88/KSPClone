@@ -48,6 +48,14 @@ namespace KSPClone.SimCore
         public Vector3d? CachedAngularVelocity { get; set; }
 
         /// <summary>
+        /// Most recent world-frame orientation of the active rigid body, written
+        /// back by the integrator each tick and replicated in the snapshot so the
+        /// client can render (and predict) the true attitude instead of guessing
+        /// it from the velocity heading (ADR-0019). Null while on-rails.
+        /// </summary>
+        public Quaterniond? CachedOrientation { get; set; }
+
+        /// <summary>
         /// Highest pilot-input client tick the server has applied to this
         /// vessel (the reconciliation ack — ADR-0013 §7). Stamped into every
         /// snapshot so the client can reset to authoritative state and replay

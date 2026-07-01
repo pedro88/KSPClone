@@ -24,27 +24,19 @@ namespace KSPClone.SimCore
     }
 
     /// <summary>
-    /// Empty-Pilot fallback (CREW-4, M2-T08): SAS-style attitude hold. Damps the
-    /// vessel's angular rate toward zero so an uncrewed Pilot does not let the
-    /// vessel tumble. Dumber than a human: it kills rotation (holds the current
-    /// attitude in the limit) and never issues a maneuver or touches throttle.
-    ///
-    /// It emits an attitude *rate* command opposing the measured angular
-    /// velocity; the integrator turns that into a damping torque
-    /// (dω/dt ≈ −gain·ω). Full hold-to-a-captured-orientation needs an
-    /// authoritative orientation field, which SimCore does not yet carry —
-    /// rate damping is the representable, honest M2 SAS.
+    /// Empty-Pilot fallback (CREW-4, M2-T08): SAS-style attitude hold. Commands a
+    /// zero body rate so an uncrewed Pilot holds attitude instead of tumbling.
+    /// Under the kinematic rate control the integrator applies (ADR-0019), a zero
+    /// rate command drives the angular velocity to zero — the vessel stops
+    /// rotating and holds. Dumber than a human: it never manoeuvres or touches
+    /// throttle. (Now that orientation is replicated, a later slice can upgrade
+    /// this to hold a *captured* orientation rather than merely zero the rate.)
     /// </summary>
     public sealed class PilotSasAutomation : IStationAutomation
     {
-        public double DampingGain { get; }
-
-        public PilotSasAutomation(double dampingGain = 2.0) => DampingGain = dampingGain;
-
         public void Drive(Vessel vessel, double dtSeconds)
         {
-            var w = vessel.CachedAngularVelocity ?? Vector3d.Zero;
-            vessel.AttitudeCommand = new Vector3d(-DampingGain * w.X, -DampingGain * w.Y, -DampingGain * w.Z);
+            vessel.AttitudeCommand = Vector3d.Zero; // hold: zero target rate
             // Throttle is left untouched (CREW-4: SAS holds attitude only).
         }
     }

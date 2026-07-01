@@ -110,6 +110,10 @@ namespace KSPClone.Server
                 // Angular velocity is frame-independent (origin shifts are
                 // pure translations), so the local value is the world value.
                 vessel.CachedAngularVelocity = ToVector3d(rb.Body.angularVelocity);
+                // Orientation is likewise frame-independent (rebases are pure
+                // translations) — replicate it so the client renders the true
+                // attitude, not a velocity guess (ADR-0019).
+                vessel.CachedOrientation = ToQuaterniond(rb.Body.rotation);
             }
 
             // (4) Floating-origin rebase. The manager updates the bubble's
@@ -200,24 +204,15 @@ namespace KSPClone.Server
 
         private void ApplyAttitude(RigidVesselBody rb, Vessel vessel)
         {
-            // M1 attitude: a small torque from the pilot's (pitch, yaw,
-            // roll) rate command, scaled by inertia. Realistic reaction
-            // wheels / RCS torque modelling lands with the propulsion
-            // system in a later slice.
-            var rate = vessel.AttitudeCommand;
-            if (rate.LengthSquared <= 0.0) return;
-            var mass = _masses.Get(vessel.Id);
-            if (mass is null) return;
-            // Convert (pitch, yaw, roll) rates to a torque vector in
-            // vessel-local axes: pitch = X, yaw = Y, roll = Z.
-            var torqueLocal = ToUnity(new Vector3d(rate.X, rate.Y, rate.Z));
-            // Multiply by inertia magnitudes to get Newton-metres.
-            torqueLocal = new Vector3(
-                torqueLocal.x * (float)mass.InertiaPrincipalX,
-                torqueLocal.y * (float)mass.InertiaPrincipalY,
-                torqueLocal.z * (float)mass.InertiaPrincipalZ);
-            var torqueWorld = rb.transform.TransformDirection(torqueLocal);
-            rb.Body.AddTorque(torqueWorld, ForceMode.Force);
+            // Arcade hand-flying (ADR-0019): the pilot command is a *target*
+            // body-frame angular rate (pitch=X, yaw=Y, roll=Z, rad/s). Drive the
+            // rigidbody's angular velocity straight to it — holding a key rotates
+            // at that rate, releasing (command 0) stops the spin, so the craft
+            // holds its attitude instead of tumbling under an un-damped torque.
+            // This is kinematic rate control, not a physical reaction-wheel/RCS
+            // torque model; that (with authority-per-station) is a later slice.
+            var worldRate = rb.transform.TransformDirection(ToUnity(vessel.AttitudeCommand));
+            rb.Body.angularVelocity = worldRate;
         }
 
         private void CollectRigidBodies(PhysicsBubble bubble, List<RigidVesselBody> output)
@@ -235,6 +230,7 @@ namespace KSPClone.Server
         }
 
         private static Vector3d ToVector3d(Vector3 v) => new(v.x, v.y, v.z);
+        private static Quaterniond ToQuaterniond(Quaternion q) => new(q.x, q.y, q.z, q.w);
         private static Vector3 ToUnity(Vector3d v) => new((float)v.X, (float)v.Y, (float)v.Z);
     }
 }

@@ -84,40 +84,46 @@ namespace KSPClone.SimCore
             if (Buffer.Count == 1)
             {
                 var only = Buffer.Snapshots[0];
-                return new InterpolatedState(only.Position, only.Velocity);
+                return new InterpolatedState(only.Position, only.Velocity, only.Orientation);
             }
 
             if (!Buffer.TryBracket(renderTime, out var before, out var after))
             {
-                // Past the newest snapshot: extrapolate position, hold velocity.
+                // Past the newest snapshot: extrapolate position, hold velocity + orientation.
                 var newest = Buffer.Snapshots[Buffer.Count - 1];
                 var dt = renderTime - newest.GameTime;
-                if (dt <= 0.0) return new InterpolatedState(newest.Position, newest.Velocity);
-                return new InterpolatedState(newest.Position + newest.Velocity * dt, newest.Velocity);
+                if (dt <= 0.0) return new InterpolatedState(newest.Position, newest.Velocity, newest.Orientation);
+                return new InterpolatedState(newest.Position + newest.Velocity * dt, newest.Velocity, newest.Orientation);
             }
 
             if (before.GameTime >= after.GameTime)
-                return new InterpolatedState(before.Position, before.Velocity);
+                return new InterpolatedState(before.Position, before.Velocity, before.Orientation);
 
             var t = (renderTime - before.GameTime) / (after.GameTime - before.GameTime);
             if (t < 0.0) t = 0.0;
             if (t > 1.0) t = 1.0;
             return new InterpolatedState(
                 before.Position * (1.0 - t) + after.Position * t,
-                before.Velocity * (1.0 - t) + after.Velocity * t);
+                before.Velocity * (1.0 - t) + after.Velocity * t,
+                Quaterniond.Slerp(before.Orientation, after.Orientation, t));
         }
     }
 
-    /// <summary>Interpolated render state: transform + velocity (NET-4).</summary>
+    /// <summary>Interpolated render state: transform + velocity + orientation (NET-4).</summary>
     public readonly struct InterpolatedState
     {
         public Vector3d Position { get; }
         public Vector3d Velocity { get; }
+        public Quaterniond Orientation { get; }
 
         public InterpolatedState(Vector3d position, Vector3d velocity)
+            : this(position, velocity, Quaterniond.Identity) { }
+
+        public InterpolatedState(Vector3d position, Vector3d velocity, Quaterniond orientation)
         {
             Position = position;
             Velocity = velocity;
+            Orientation = orientation;
         }
     }
 }

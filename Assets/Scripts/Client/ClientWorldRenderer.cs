@@ -88,7 +88,7 @@ namespace KSPClone.Client
                 if (flight.TrySampleOther(id, out var world))
                     Place(id, flight.ToRenderLocal(world), isControlled: false);
 
-            OrientControlled(controlled, flight.ControlledState.Velocity);
+            OrientControlled(controlled, flight.ControlledState.Orientation);
             RenderGround(flight);
             RenderReferenceField(flight);
             RenderThrust(flight, throttle);
@@ -247,12 +247,10 @@ namespace KSPClone.Client
             var center = new Vector3((float)c.X, (float)c.Y, (float)c.Z);
             float len = (float)(0.6 + 3.0 * throttle);     // plume length grows with throttle
 
-            // Exhaust leaves the tail — opposite the velocity heading the
-            // capsule points along; upright (−Y) when at rest on the pad.
-            var vel = flight.ControlledState.Velocity;
-            Vector3 tail = vel.LengthSquared > 0.25
-                ? -new Vector3((float)vel.X, (float)vel.Y, (float)vel.Z).normalized
-                : Vector3.down;
+            // Exhaust leaves the engine down the vessel's local −Y (opposite the
+            // +Y thrust axis), rotated by the true attitude — so the plume tracks
+            // where the craft actually points, not the velocity heading.
+            Vector3 tail = ToUnity(flight.ControlledState.Orientation) * Vector3.down;
 
             _flame.transform.position = center + tail * (1f + len * 0.5f);
             _flame.transform.rotation = Quaternion.FromToRotation(Vector3.up, tail);
@@ -325,23 +323,19 @@ namespace KSPClone.Client
             go.transform.position = new Vector3((float)local.X, (float)local.Y, (float)local.Z);
         }
 
-        // Orient the controlled capsule so its long axis (+Y) points along its
-        // velocity — the craft "flies nose-first". Falls back to upright when
-        // nearly at rest (on the pad). The client has no authoritative attitude,
-        // so velocity heading is the honest stand-in.
-        private void OrientControlled(VesselId id, Vector3d velocity)
+        // Orient the controlled capsule to its true, server-authoritative
+        // attitude (ADR-0019): the capsule's long axis (+Y) is the vessel's
+        // thrust axis, so the nose points where you're actually steering — no
+        // more velocity-heading guess. The quaternion is the predicted state's
+        // (reconciled against snapshots), so steering is zero-lag.
+        private void OrientControlled(VesselId id, Quaterniond orientation)
         {
             if (!_objects.TryGetValue(id, out var go)) return;
-            if (velocity.LengthSquared > 0.25)
-            {
-                var d = new Vector3((float)velocity.X, (float)velocity.Y, (float)velocity.Z).normalized;
-                go.transform.rotation = Quaternion.FromToRotation(Vector3.up, d);
-            }
-            else
-            {
-                go.transform.rotation = Quaternion.identity;
-            }
+            go.transform.rotation = ToUnity(orientation);
         }
+
+        private static Quaternion ToUnity(Quaterniond q) =>
+            new((float)q.X, (float)q.Y, (float)q.Z, (float)q.W);
 
         private Texture2D? _bandTex;
 

@@ -26,8 +26,8 @@ namespace KSPClone.SimCore.Tests
             Assert.IsNotNull(msg);
             Assert.AreEqual(1L, msg!.Value.ClientTick);
             Assert.AreEqual(v, msg.Value.VesselId);
-            Assert.Greater(model.ControlledState.Position.X, before.X,
-                "Throttle must move the predicted state on the same call (NET-2).");
+            Assert.Greater(model.ControlledState.Position.Y, before.Y,
+                "Throttle must move the predicted state on the same call (NET-2); thrust is +Y (ADR-0019).");
         }
 
         [Test]
@@ -73,8 +73,8 @@ namespace KSPClone.SimCore.Tests
             });
             model.OnSnapshotBundle(bundle);
 
-            // Reset to origin (ack tick 1) then replay tick 2 → state moves off origin again.
-            Assert.Greater(model.ControlledState.Position.X, 0.0, "Unacked input (tick 2) is replayed.");
+            // Reset to origin (ack tick 1) then replay tick 2 → state moves off origin again (+Y thrust).
+            Assert.Greater(model.ControlledState.Position.Y, 0.0, "Unacked input (tick 2) is replayed.");
             Assert.AreEqual(1, model.Predictor!.PendingCount, "Only the acked tick is discarded.");
         }
 

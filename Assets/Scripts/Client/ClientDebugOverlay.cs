@@ -114,7 +114,7 @@ namespace KSPClone.Client
             // Pilot controls cheat-sheet + legend for the 3D view.
             GUILayout.BeginArea(new Rect(10, Screen.height - 230, 360, 220), GUI.skin.box);
             GUILayout.Label("== CONTROLS (Pilot) ==");
-            GUILayout.Label("Shift : throttle (hold = full)");
+            GUILayout.Label("Shift/Ctrl : throttle up/down   X: cut  Z: full");
             GUILayout.Label("W / S : pitch");
             GUILayout.Label("A / D : yaw");
             GUILayout.Label("Q / E : roll");

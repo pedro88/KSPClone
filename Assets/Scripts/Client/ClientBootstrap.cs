@@ -17,6 +17,8 @@ namespace KSPClone.Client
         [SerializeField] private string _host = "127.0.0.1";
         [SerializeField] private int _port = 9050;
         [SerializeField] private float _attitudeRateRadPerSec = 0.5f;
+        [SerializeField] private float _throttleRatePerSec = 1.0f; // full-range ramp in ~1 s
+        private float _throttle;                                   // persistent analog throttle [0..1]
 
         public ClientNetPeer Peer { get; private set; }
         // Predictor thrust accel roughly matches the demo launch engine's
@@ -66,7 +68,18 @@ namespace KSPClone.Client
             Peer?.Poll();
             if (Flight.ControlledVesselId is null) return;
 
-            float throttle = Input.GetKey(KeyCode.LeftShift) ? 1f : 0f;
+            // Analog throttle (KSP-style): Shift ramps up, Ctrl down, X cuts to
+            // zero, Z jumps to full. Persists between frames so you can set a
+            // partial burn instead of the old all-or-nothing hold.
+            if (Input.GetKeyDown(KeyCode.X)) _throttle = 0f;
+            else if (Input.GetKeyDown(KeyCode.Z)) _throttle = 1f;
+            else
+            {
+                float d = (Input.GetKey(KeyCode.LeftShift) ? 1f : 0f)
+                        - (Input.GetKey(KeyCode.LeftControl) ? 1f : 0f);
+                _throttle = Mathf.Clamp01(_throttle + d * _throttleRatePerSec * Time.unscaledDeltaTime);
+            }
+            float throttle = _throttle;
             _lastThrottle = throttle;
             float pitch = Input.GetAxis("Vertical") * _attitudeRateRadPerSec;
             float yaw = Input.GetAxis("Horizontal") * _attitudeRateRadPerSec;

@@ -5,13 +5,13 @@ using System;
 namespace KSPClone.SimCore
 {
     /// <summary>
-    /// Minimal hand-rolled prediction step: applies throttle as a
-    /// linear acceleration along the vessel's local thrust axis
-    /// (+Y — the seed engine's thrust direction) and attitude as an
-    /// angular velocity delta. Gravity is omitted — the predictor focuses on
-    /// reproducing the server's response to throttle/attitude inputs
-    /// for the prediction loop. A future slice wires the full
-    /// server-side integrator here (ADR-0006).
+    /// Minimal hand-rolled prediction step matching the server's arcade
+    /// hand-flying model (ADR-0019): the pilot input's (pitch, yaw, roll) is a
+    /// *target* body-frame angular rate, so the predicted orientation integrates
+    /// that rate directly (and holds when the input is zero); thrust is a linear
+    /// acceleration along the vessel's local +Y rotated into world by the current
+    /// orientation, so tilting the craft turns the thrust just like the server.
+    /// Gravity is omitted — reconciliation corrects the residual (NET-3).
     /// </summary>
     public sealed class TrivialPredictionStep : IPredictionStep
     {
@@ -28,17 +28,20 @@ namespace KSPClone.SimCore
 
         public PredictedVesselState Step(PredictedVesselState current, PilotInputMessage input, long newClientTick)
         {
+            // Attitude: input is a target body-frame rate; integrate orientation
+            // by it and carry it as the (kinematic) angular velocity.
+            var bodyRate = new Vector3d(input.PitchRate, input.YawRate, input.RollRate);
+            var newOrient = (current.Orientation * Quaterniond.FromAngularVelocity(bodyRate, FixedDt)).Normalized();
+            var worldAngVel = newOrient.Rotate(bodyRate);
+
+            // Thrust along the vessel's local +Y, rotated into world by the
+            // current attitude — tilt the craft and the thrust tilts with it.
             var a = ThrustAccelerationPerThrottleUnit * input.Throttle;
-            // Thrust is along the vessel's local +Y — the engine's
-            // thrustDirLocal is (0,1,0) (WorldSeed) and the server applies it up
-            // the untumbled +Y, matching the client's +Y-up render convention.
-            // (Predicting on +X laid the velocity-aligned capsule flat the
-            // instant you throttled on the pad.)
-            var newVel = current.Velocity + new Vector3d(0, a * FixedDt, 0);
+            var thrustWorld = newOrient.Rotate(new Vector3d(0, 1, 0));
+            var newVel = current.Velocity + thrustWorld * (a * FixedDt);
             var newPos = current.Position + newVel * FixedDt;
 
-            var angVel = new Vector3d(input.PitchRate, input.YawRate, input.RollRate);
-            return new PredictedVesselState(newPos, newVel, angVel, newClientTick);
+            return new PredictedVesselState(newPos, newVel, worldAngVel, newOrient, newClientTick);
         }
     }
 }

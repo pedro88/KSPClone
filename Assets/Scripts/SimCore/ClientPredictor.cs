@@ -17,18 +17,24 @@ namespace KSPClone.SimCore
         public Vector3d Position { get; }
         public Vector3d Velocity { get; }
         public Vector3d AngularVelocity { get; }
+        public Quaterniond Orientation { get; }
         public long LastProcessedClientTick { get; }
 
         public PredictedVesselState(Vector3d position, Vector3d velocity, Vector3d angularVelocity, long lastProcessedClientTick)
+            : this(position, velocity, angularVelocity, Quaterniond.Identity, lastProcessedClientTick) { }
+
+        public PredictedVesselState(Vector3d position, Vector3d velocity, Vector3d angularVelocity,
+            Quaterniond orientation, long lastProcessedClientTick)
         {
             Position = position;
             Velocity = velocity;
             AngularVelocity = angularVelocity;
+            Orientation = orientation;
             LastProcessedClientTick = lastProcessedClientTick;
         }
 
         public static readonly PredictedVesselState Identity =
-            new(Vector3d.Zero, Vector3d.Zero, Vector3d.Zero, 0L);
+            new(Vector3d.Zero, Vector3d.Zero, Vector3d.Zero, Quaterniond.Identity, 0L);
     }
 
     /// <summary>

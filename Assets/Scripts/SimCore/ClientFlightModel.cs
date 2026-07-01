@@ -119,7 +119,7 @@ namespace KSPClone.SimCore
         {
             if (Predictor is null) return;
             var authoritative = new PredictedVesselState(
-                snap.Position, snap.Velocity, snap.AngularVelocity, snap.LastProcessedClientTick);
+                snap.Position, snap.Velocity, snap.AngularVelocity, snap.Orientation, snap.LastProcessedClientTick);
             // Reset to authoritative + replay unacked inputs, then decide how to show the correction.
             var preReplay = Predictor.Reconcile(authoritative, snap.LastProcessedClientTick);
             Predictor.DiscardAcked(snap.LastProcessedClientTick);

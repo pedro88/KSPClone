@@ -84,6 +84,24 @@ namespace KSPClone.SimCore.Tests
         }
 
         [Test]
+        public void Snapshot_RoundTrips_Orientation()
+        {
+            var id = VesselId.New();
+            var orient = Quaterniond.FromAngularVelocity(new Vector3d(0.3, -0.4, 0.2), 1.1);
+            var bundle = new SnapshotBundle(1.0, 7L, new List<VesselSnapshot>
+            {
+                new(id, 1.0, 7L, Vector3d.Zero, Vector3d.Zero, Vector3d.Zero, orient, 0L),
+            });
+
+            var back = WireCodec.DecodeSnapshot(WireCodec.EncodeSnapshot(bundle));
+            var s = back.Vessels[0];
+            Assert.AreEqual(orient.X, s.Orientation.X, 1e-12);
+            Assert.AreEqual(orient.Y, s.Orientation.Y, 1e-12);
+            Assert.AreEqual(orient.Z, s.Orientation.Z, 1e-12);
+            Assert.AreEqual(orient.W, s.Orientation.W, 1e-12, "Orientation must survive the wire (ADR-0019).");
+        }
+
+        [Test]
         public void ClientCommand_RoundTrips_RequestAndApprove()
         {
             var req = WireCodec.EncodeClientCommand(ClientCommand.RequestWarp(1000.0, WarpKind.OnRails));

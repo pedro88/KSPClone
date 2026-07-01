@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using KSPClone.SimCore;
 
@@ -6,6 +7,24 @@ namespace KSPClone.SimCore.Tests
     [TestFixture]
     public sealed class ClientPredictorTests
     {
+        [Test]
+        public void Prediction_ThrustFollowsAttitude()
+        {
+            // Pitch +90° about X (one tick, dt=1, rate=π/2) with no throttle,
+            // then throttle with zero rate: thrust is +Y in the body frame, so
+            // after the pitch it acts along world +Z (ADR-0019).
+            var v = VesselId.New();
+            var step = new TrivialPredictionStep(fixedDt: 1.0, thrustAccel: 10.0);
+            var s1 = step.Step(PredictedVesselState.Identity,
+                new PilotInputMessage(v, 1L, 0.0, Math.PI / 2.0, 0, 0), 1L);
+            var s2 = step.Step(s1, new PilotInputMessage(v, 2L, 1.0, 0, 0, 0), 2L);
+
+            Assert.AreEqual(0.0, s2.Velocity.X, 1e-6);
+            Assert.AreEqual(0.0, s2.Velocity.Y, 1e-6);
+            Assert.AreEqual(10.0, s2.Velocity.Z, 1e-6,
+                "thrust rotates with the craft: +Y body → +Z after a 90° pitch.");
+        }
+
         [Test]
         public void SubmitInput_AppliesImmediately_AndBuffersForReplay()
         {
@@ -39,13 +58,13 @@ namespace KSPClone.SimCore.Tests
 
             var pre = predictor.Reconcile(authState, ackedClientTick: 1L);
 
-            Assert.AreEqual(preReplay.Position.X, pre.Position.X, 1e-9);
+            Assert.AreEqual(preReplay.Position.Y, pre.Position.Y, 1e-9);
             // Post-replay: tick 2 replayed from the authoritative state, which already
-            // carries tick 1's velocity. Semi-implicit Euler:
+            // carries tick 1's velocity. Semi-implicit Euler along the +Y thrust axis:
             //   newVel = authState.Vel + a·dt ; newPos = authState.Pos + newVel·dt
-            var replayVel = authState.Velocity.X + step.ThrustAccelerationPerThrottleUnit * step.FixedDt;
-            Assert.AreEqual(authState.Position.X + replayVel * step.FixedDt,
-                            predictor.State.Position.X, 1e-9);
+            var replayVel = authState.Velocity.Y + step.ThrustAccelerationPerThrottleUnit * step.FixedDt;
+            Assert.AreEqual(authState.Position.Y + replayVel * step.FixedDt,
+                            predictor.State.Position.Y, 1e-9);
         }
 
         [Test]
@@ -86,11 +105,11 @@ namespace KSPClone.SimCore.Tests
 
             predictor.SubmitInput(new PilotInputMessage(v, 1L, 1.0, 0, 0, 0));
 
-            // After one tick: v += a * dt; pos += v * dt
-            var expectedVx = 10.0 * (1.0 / 60.0);
-            var expectedPx = expectedVx * (1.0 / 60.0);
-            Assert.AreEqual(expectedVx, predictor.State.Velocity.X, 1e-9);
-            Assert.AreEqual(expectedPx, predictor.State.Position.X, 1e-9);
+            // After one tick: v += a * dt; pos += v * dt, along the +Y thrust axis.
+            var expectedVy = 10.0 * (1.0 / 60.0);
+            var expectedPy = expectedVy * (1.0 / 60.0);
+            Assert.AreEqual(expectedVy, predictor.State.Velocity.Y, 1e-9);
+            Assert.AreEqual(expectedPy, predictor.State.Position.Y, 1e-9);
         }
 
         [Test]

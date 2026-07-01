@@ -18,16 +18,25 @@ namespace KSPClone.SimCore
         public Vector3d Velocity { get; }
         /// <summary>Angular velocity (rad/s, world axes) — ADR-0013 §8.</summary>
         public Vector3d AngularVelocity { get; }
+        /// <summary>World-frame orientation (ADR-0019). Identity for on-rails vessels.</summary>
+        public Quaterniond Orientation { get; }
         /// <summary>The reconciliation ack: highest applied pilot-input tick (ADR-0013 §7). 0 for vessels with no pilot input.</summary>
         public long LastProcessedClientTick { get; }
 
         public VesselSnapshot(VesselId vesselId, double gameTime, long seq, Vector3d position, Vector3d velocity)
-            : this(vesselId, gameTime, seq, position, velocity, Vector3d.Zero, 0L)
+            : this(vesselId, gameTime, seq, position, velocity, Vector3d.Zero, Quaterniond.Identity, 0L)
+        {
+        }
+
+        /// <summary>Convenience overload without orientation (defaults to identity).</summary>
+        public VesselSnapshot(VesselId vesselId, double gameTime, long seq, Vector3d position, Vector3d velocity,
+            Vector3d angularVelocity, long lastProcessedClientTick)
+            : this(vesselId, gameTime, seq, position, velocity, angularVelocity, Quaterniond.Identity, lastProcessedClientTick)
         {
         }
 
         public VesselSnapshot(VesselId vesselId, double gameTime, long seq, Vector3d position, Vector3d velocity,
-            Vector3d angularVelocity, long lastProcessedClientTick)
+            Vector3d angularVelocity, Quaterniond orientation, long lastProcessedClientTick)
         {
             VesselId = vesselId;
             GameTime = gameTime;
@@ -35,6 +44,7 @@ namespace KSPClone.SimCore
             Position = position;
             Velocity = velocity;
             AngularVelocity = angularVelocity;
+            Orientation = orientation;
             LastProcessedClientTick = lastProcessedClientTick;
         }
     }
@@ -150,7 +160,8 @@ namespace KSPClone.SimCore
                 if (!v.CachedWorldPosition.HasValue || !v.CachedWorldVelocity.HasValue) continue;
                 snapshots.Add(new VesselSnapshot(v.Id, t, EmittedSeq,
                     v.CachedWorldPosition.Value, v.CachedWorldVelocity.Value,
-                    v.CachedAngularVelocity ?? Vector3d.Zero, v.LastProcessedClientTick));
+                    v.CachedAngularVelocity ?? Vector3d.Zero,
+                    v.CachedOrientation ?? Quaterniond.Identity, v.LastProcessedClientTick));
             }
             var bundle = new SnapshotBundle(t, EmittedSeq, snapshots);
             _onBundle?.Invoke(bundle);
