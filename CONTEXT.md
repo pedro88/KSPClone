@@ -88,6 +88,15 @@ A deliberate place a vessel may flex or move: robotic hinges/rotors and docking 
 **Structural failure**:
 A discrete event (decoupler fires, joint breaks past a load threshold) rather than a continuous soft-body simulation.
 
+**Surface**:
+The solid boundary of a *celestial body* at its radius, on which a vessel can rest or land. M2.5 models it as a *ground plane* — a flat, static collider tangent to the body at the launch/landing site — not curved terrain (ADR-0018).
+
+**Ground contact**:
+Server-authoritative collision between an active-physics vessel and a body's *surface*: the ground plane's normal force balances gravity so a landed vessel holds its weight instead of falling through (PHYS-7). Simulated by PhysX inside the vessel's *physics bubble*, like any other active-physics force.
+
+**Radial-up**:
+The local "up" at a point on a body's *surface*: the unit vector from the body's centre to that point. The demo launch site is chosen at the body's +Y pole so radial-up equals world +Y, letting the client's untumbled +Y-up presentation hold without a surface-frame rotation (ADR-0018).
+
 **Vessel clock**:
 Each vessel's own "as-of game-time" stamp (`Vessel.VesselClockSeconds`). On-rails vessels stay synced to the master clock (Constitution Art. 4). An active-physics vessel that is left unattended (all players gone) is *suspended* — snapshotted, its vessel clock pauses, and it resumes from that snapshot when a player next loads it. Its vessel clock can therefore lag the master clock.
 _Avoid_: vessel time

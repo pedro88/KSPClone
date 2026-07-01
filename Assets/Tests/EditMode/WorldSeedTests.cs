@@ -101,5 +101,53 @@ namespace KSPClone.SimCore.Tests
             Assert.Greater(actualOffset.Length, 1.0,
                 "Earth orbits the Sun: the two frames must differ at non-zero t.");
         }
+
+        // --- Surface launch (M2.5-T02, PHYS-7, ADR-0018) ---
+
+        // The surface seed must place the craft at Earth's +Y pole, one pad
+        // half-height above the surface, in the parent (Earth) frame at epoch.
+        [Test]
+        public void SurfaceVessel_SpawnsAtEarthNorthPole_InParentFrame()
+        {
+            var reg = WorldSeed.CreateBodies();
+            var vessel = WorldSeed.CreateSurfaceVessel();
+
+            var (parentFramePos, _) = KeplerPropagator.StateAt(vessel.Orbit, 0.0, reg);
+
+            Assert.AreEqual(0.0, parentFramePos.X, 1e-3, "no +X component at the pole");
+            Assert.AreEqual(WorldSeed.SurfaceSpawnRadius, parentFramePos.Y, 1e-6, "up along +Y at surface radius");
+            Assert.AreEqual(0.0, parentFramePos.Z, 1e-3, "no +Z component (equatorial plane is world-XY)");
+            Assert.AreEqual(WorldSeed.SurfaceSpawnRadius, parentFramePos.Length, 1e-6);
+        }
+
+        // Radial-up at the spawn point must equal world +Y so the untumbled
+        // client presentation (+Y = up) holds without a surface frame (ADR-0018 §3).
+        [Test]
+        public void SurfaceVessel_RadialUp_IsWorldPlusY()
+        {
+            var reg = WorldSeed.CreateBodies();
+            var vessel = WorldSeed.CreateSurfaceVessel();
+
+            var (_, _, worldPos, _) = KeplerPropagator.WorldFrameStateAt(vessel.Orbit, 0.0, reg);
+            var earthPos = reg.WorldPositionOf(CelestialBodyId.Planet, 0.0);
+            var radial = worldPos - earthPos;
+
+            Assert.AreEqual(WorldSeed.SurfaceSpawnRadius, radial.Length, 1e-6,
+                "craft sits one surface-spawn-radius from Earth's centre");
+            var up = radial * (1.0 / radial.Length);
+            Assert.AreEqual(0.0, up.X, 1e-9);
+            Assert.AreEqual(1.0, up.Y, 1e-9, "radial-up is world +Y");
+            Assert.AreEqual(0.0, up.Z, 1e-9);
+        }
+
+        // Surface radius must actually clear Earth's surface (be above the
+        // ground), by exactly one pad half-height — the capsule starts in contact.
+        [Test]
+        public void SurfaceSpawnRadius_ClearsEarthSurface_ByPadHalfHeight()
+        {
+            Assert.AreEqual(WorldSeed.EarthRadius + WorldSeed.PadHalfHeight,
+                WorldSeed.SurfaceSpawnRadius, 1e-9);
+            Assert.Greater(WorldSeed.SurfaceSpawnRadius, WorldSeed.EarthRadius);
+        }
     }
 }

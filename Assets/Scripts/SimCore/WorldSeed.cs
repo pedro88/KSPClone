@@ -53,6 +53,33 @@ namespace KSPClone.SimCore
         /// <summary>Registers the seed vessel into a world (bootstrap callback for WorldRestorer).</summary>
         public static void Seed(SimWorld world) => world.RegisterVessel(CreateVessel());
 
+        // --- Surface launch (M2.5-T02, ADR-0018) ---
+        // Half-height of the seed craft; it rests with its centre this far above
+        // the ground plane, so the spawn radius clears Earth's surface by exactly
+        // one half-height and the capsule starts in contact, not falling.
+        public const double PadHalfHeight = 2.0;
+        public const double SurfaceSpawnRadius = EarthRadius + PadHalfHeight;
+
+        /// <summary>
+        /// Seed elements for a craft resting on Earth's surface at the body's
+        /// +Y pole (ADR-0018 §3). Circular (e=0), equatorial (i=0, Ω=0) so the
+        /// orbital plane is world-XY; argp=π/2 with M0=0 rotates the epoch point
+        /// to Earth-frame (0, r, 0). Result: world radial-up = world +Y, letting
+        /// the untumbled client presentation stand. Velocity is zeroed on
+        /// promotion (ServerBootstrap.OnDemoPromoted), so the "orbit" is only the
+        /// pre-promotion placeholder that fixes the spawn point.
+        /// </summary>
+        public static Vessel CreateSurfaceVessel() =>
+            new(SeedVesselId, new Orbit(
+                semiMajorAxis: SurfaceSpawnRadius,
+                eccentricity: 0.0,
+                inclination: 0.0,
+                longitudeOfAscendingNode: 0.0,
+                argumentOfPeriapsis: Math.PI / 2.0,
+                meanAnomalyAtEpoch: 0.0,
+                epochGameTime: 0.0,
+                parentBody: CelestialBodyId.Planet));
+
         // --- Demo-craft propulsion + mass (M1 Slice 1.6, ADR-0016) ---
         // Flat spec until the M3 build system emits part trees. A single
         // upper-stage-ish craft: ~5 t wet, one 60 kN / 300 s engine.

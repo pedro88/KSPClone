@@ -37,6 +37,7 @@ IDs are stable. Tasks cite them. Terms in *italics* are defined in [CONTEXT.md](
 - **PHYS-4** The system shall simulate each vessel as a *rigid vessel*, permitting motion only at *articulation points*.
 - **PHYS-5** When two vessels in the same *physics bubble* dock, the system shall join them without transferring authority between machines.
 - **PHYS-6** When a structural load exceeds a part's threshold, the system shall produce a discrete *structural failure* (no continuous soft-body flex).
+- **PHYS-7** While an active vessel rests on a body's *surface*, the system shall support its weight with a server-authoritative *ground contact* so it neither falls through the surface nor drifts, and shall preserve normal active-physics control (thrust, attitude) against that contact.
 
 ## SUSP — living universe & suspension
 

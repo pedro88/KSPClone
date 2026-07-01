@@ -37,6 +37,16 @@ namespace KSPClone.Server
             Body.useGravity = false; // gravity is applied manually by the BubbleIntegrator (M1-T06)
             Body.interpolation = RigidbodyInterpolation.None;
             Body.collisionDetectionMode = CollisionDetectionMode.Discrete;
+
+            // Contact hull for surface/ground collision (M2.5-T02, PHYS-7). One
+            // capsule approximating the single-rigid-body craft (ADR-0005). Mass
+            // and inertia are set explicitly by ServerVesselBodies after spawn,
+            // so this collider's presence must not be relied on to derive them.
+            var capsule = gameObject.AddComponent<CapsuleCollider>();
+            capsule.direction = 1; // Y axis — matches the +Y-up / +Y-thrust convention
+            capsule.radius = 1.0f;
+            capsule.height = (float)(WorldSeed.PadHalfHeight * 2.0); // 4 m tall
+            capsule.center = Vector3.zero;
         }
 
         /// <summary>

@@ -23,9 +23,16 @@ namespace KSPClone.Server
         // enough out (~50 Earth radii) that gravity is ~0.004 m/s² — negligible
         // — and zero its orbital velocity on promotion, so it begins genuinely
         // at rest and stays put until you throttle. The client draws a visual
-        // launch pad under it. (A real surface launch with weight would need
-        // ground-collision, which the sim has not got yet.) Off → real orbit.
+        // launch pad under it. Ignored when _demoStartOnSurface is on. Off → real orbit.
         [SerializeField] private bool _demoStartAtRest = true;
+
+        // Surface launch (M2.5-T02, PHYS-7, ADR-0018): seed the craft resting on
+        // Earth's surface at the +Y pole and spawn a static ground pad under it on
+        // promotion, so it holds real weight (~9.82 m/s²). Takes precedence over
+        // _demoStartAtRest. Off → the far-out at-rest sandbox above.
+        [SerializeField] private bool _demoStartOnSurface = true;
+        private bool _surfaceMode;
+        private SurfaceGroundBody _ground;
 
         public ServerSimulation Sim { get; private set; }
 
@@ -57,7 +64,8 @@ namespace KSPClone.Server
             Sim = new ServerSimulation(world);
             WireActivePhysics();
             WirePersistence();
-            if (_demoStartAtRest) ApplyDemoStartAtRest(world);
+            if (_demoStartOnSurface) ApplyDemoStartOnSurface(world);
+            else if (_demoStartAtRest) ApplyDemoStartAtRest(world);
 
             _transport = new LiteNetLibServerTransport();
             _transport.Start(_port);
@@ -77,6 +85,7 @@ namespace KSPClone.Server
         private void OnDestroy()
         {
             if (Sim?.Promotion != null) Sim.Promotion.VesselPromoted -= OnDemoPromoted;
+            if (_ground != null) Destroy(_ground.gameObject);
             _vesselBodies?.Dispose();
             _bubbleHost?.Dispose();
             _transport?.Dispose();
@@ -101,6 +110,26 @@ namespace KSPClone.Server
             Sim.Promotion.VesselPromoted += OnDemoPromoted;
         }
 
+        // Seed the demo craft resting on Earth's surface at the +Y pole
+        // (ADR-0018). Same as the at-rest sandbox but at surface radius, where
+        // gravity is real (~9.82 m/s²) and a static ground pad (spawned on
+        // promotion) holds its weight. Velocity is zeroed on promotion so it
+        // starts genuinely at rest in contact, not on the placeholder circular
+        // element used only to fix the spawn point.
+        private void ApplyDemoStartOnSurface(SimWorld world)
+        {
+            _surfaceMode = true;
+            if (world.Vessels.TryGetValue(WorldSeed.SeedVesselId, out var v))
+            {
+                var seed = WorldSeed.CreateSurfaceVessel();
+                v.Orbit = new Orbit(
+                    seed.Orbit.SemiMajorAxis, seed.Orbit.Eccentricity, seed.Orbit.Inclination,
+                    seed.Orbit.LongitudeOfAscendingNode, seed.Orbit.ArgumentOfPeriapsis,
+                    seed.Orbit.MeanAnomalyAtEpoch, world.Clock.GameTimeSeconds, seed.Orbit.ParentBody);
+            }
+            Sim.Promotion.VesselPromoted += OnDemoPromoted;
+        }
+
         private void OnDemoPromoted(PromotionEvent e)
         {
             if (!e.VesselId.Equals(WorldSeed.SeedVesselId)) return;
@@ -109,6 +138,25 @@ namespace KSPClone.Server
                 body.Body.linearVelocity = Vector3.zero;
                 body.Body.angularVelocity = Vector3.zero;
             }
+            if (_surfaceMode) SpawnGroundUnder(e);
+        }
+
+        // Create the static ground pad in the promoted craft's bubble scene,
+        // top face at the surface directly beneath it (ADR-0018 §1/§4).
+        private void SpawnGroundUnder(PromotionEvent e)
+        {
+            if (_ground != null) return; // one pad for the demo craft
+            if (_bubbleHost == null) return;
+            if (!Sim.Bubbles.TryGet(e.BubbleId, out var bubble)) return;
+            var scene = _bubbleHost.TryGetScene(e.BubbleId);
+            if (!scene.HasValue) return;
+
+            var origin = bubble.GlobalOrigin;
+            var craftLocal = new Vector3(
+                (float)(e.WorldPosition.X - origin.X),
+                (float)(e.WorldPosition.Y - origin.Y),
+                (float)(e.WorldPosition.Z - origin.Z));
+            _ground = SurfaceGroundFactory.Create(scene.Value, craftLocal);
         }
 
         // Stand up the active-physics column: seed the demo craft's mass/engines,
