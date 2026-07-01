@@ -71,6 +71,30 @@ namespace KSPClone.SimCore.Tests
         }
 
         [Test]
+        public void Launch_FromStockParts_BuildsEngines_AndWetMass()
+        {
+            // pod → FL-T400 (2000 kg prop) → LV-909 Terrier engine.
+            var d = Design.Create(DesignId.New(), "stock", StockParts.Mk1Pod);
+            var tank = d.AllocateNodeId();
+            d.Tree.Add(new PartNode(tank, StockParts.FlT400, d.RootNodeId, "bottom", PartPose.Identity));
+            var eng = d.AllocateNodeId();
+            d.Tree.Add(new PartNode(eng, StockParts.Terrier, tank, "bottom", PartPose.Identity));
+
+            var world = new SimWorld();
+            var masses = new VesselMassRegistry();
+            var engines = new VesselEngineRegistry();
+            var res = LaunchInstantiator.Launch(d, StockParts.Catalog(),
+                new Orbit(7_000_000.0, 0, 0, 0, 0, 0, 0, CelestialBodyId.Planet), world, masses, engines);
+
+            // Wet mass = 840 + (250 + 2000) + 500 = 3590 kg.
+            Assert.AreEqual(3590.0, res.TotalMassKg, 1e-9);
+            Assert.AreEqual(1, res.EngineCount);
+            Assert.AreEqual(3590.0, masses.Get(res.Vessel.Id)!.MassKg, 1e-9);
+            var em = engines.EnginesFor(res.Vessel.Id);
+            Assert.IsNotNull(em);
+        }
+
+        [Test]
         public void Launch_TwoVessels_FromSameDesign_AreDistinct()
         {
             var d = ThreePartDesign();

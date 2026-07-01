@@ -30,15 +30,32 @@ namespace KSPClone.Construction
     public sealed class PartType
     {
         public PartTypeId Id { get; }
+        public string DisplayName { get; }
         public double DryMassKg { get; }
         public IReadOnlyList<AttachPoint> AttachPoints { get; }
 
-        public PartType(PartTypeId id, double dryMassKg, IReadOnlyList<AttachPoint>? attachPoints = null)
+        // Optional propulsion (engine parts): 0 thrust = not an engine.
+        public double EngineThrustN { get; }
+        public double EngineIspS { get; }
+        // Optional propellant this part holds (tanks and engines with built-in fuel).
+        public double PropellantKg { get; }
+
+        public PartType(
+            PartTypeId id, double dryMassKg,
+            IReadOnlyList<AttachPoint>? attachPoints = null,
+            string? displayName = null,
+            double engineThrustN = 0.0, double engineIspS = 0.0, double propellantKg = 0.0)
         {
             Id = id;
+            DisplayName = displayName ?? id.Value;
             DryMassKg = dryMassKg;
             AttachPoints = attachPoints ?? Array.Empty<AttachPoint>();
+            EngineThrustN = engineThrustN;
+            EngineIspS = engineIspS;
+            PropellantKg = propellantKg;
         }
+
+        public bool IsEngine => EngineThrustN > 0.0;
 
         public bool HasAttachPoint(string key)
         {
