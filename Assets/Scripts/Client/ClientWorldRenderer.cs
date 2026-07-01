@@ -160,7 +160,10 @@ namespace KSPClone.Client
             if (Input.GetMouseButton(1))
             {
                 _camYaw += Input.GetAxis("Mouse X") * OrbitSpeed;
-                _camPitch = Mathf.Clamp(_camPitch - Input.GetAxis("Mouse Y") * OrbitSpeed, -85f, 85f);
+                // Allow looking essentially straight down: on a vertical launch
+                // the body you came from sits directly below (−Y), so you must be
+                // able to pitch to ~90° to see the Earth globe under the craft.
+                _camPitch = Mathf.Clamp(_camPitch - Input.GetAxis("Mouse Y") * OrbitSpeed, -89f, 89f);
             }
             _camDistance = Mathf.Clamp(_camDistance - Input.mouseScrollDelta.y * ZoomSpeed, 3f, 400f);
 

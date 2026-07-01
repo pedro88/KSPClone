@@ -124,6 +124,7 @@ namespace KSPClone.Client
             GUILayout.Label("grey cubes    = world reference (speed)");
             GUILayout.Label("orange plume  = thrust");
             GUILayout.Label("green grid    = ground (sinks away as you climb)");
+            GUILayout.Label("Earth globe   = straight down — right-drag to look back");
             GUILayout.EndArea();
         }
 
