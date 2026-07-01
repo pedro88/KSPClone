@@ -68,8 +68,8 @@ namespace KSPClone.Client
         // the climb. The plane is ~30 km across and drawn world-relative, so it
         // recedes as a shrinking grid up to tens of km of altitude — bridging to
         // where the skybox Earth globe takes over (no empty gap below).
-        private const float GroundHalfSpanScale = 3000f; // Unity plane base 10 m → ~30 km
-        private const float GroundFarClip = 40000f;       // metres
+        private const float GroundHalfSpanScale = 40000f; // Unity plane base 10 m → ~400 km wide
+        private const float GroundFarClip = 500000f;       // metres — keep the grid visible into the hundreds of km
 
         public ClientWorldRenderer(Transform? camera = null)
         {
@@ -201,15 +201,16 @@ namespace KSPClone.Client
             _ground = GameObject.CreatePrimitive(PrimitiveType.Plane); // 10 m base, normal +Y
             _ground.name = "LaunchPadGround";
             Object.Destroy(_ground.GetComponent<Collider>()); // presentation only (no contact)
-            // ~30 km square: it's world-pinned and rendered relative to the craft,
+            // ~400 km square: it's world-pinned and rendered relative to the craft,
             // so it slides downward as you climb — a big grid makes that motion
             // (and thus altitude) legible, and with the pushed-out far clip it
-            // stays on-screen for tens of km, until the skybox Earth globe appears.
+            // stays on-screen into the hundreds of km, handing off to the skybox
+            // Earth globe with no gap. Mipmaps blur the far cells (no moiré).
             _ground.transform.localScale = new Vector3(GroundHalfSpanScale, 1f, GroundHalfSpanScale);
             var mat = _ground.GetComponent<Renderer>().material;
             mat.color = Color.white;                       // let the texture's colours show
             mat.mainTexture = GroundGridTexture();
-            mat.mainTextureScale = new Vector2(60f, 60f);  // ~500 m grid cells across the 30 km plane
+            mat.mainTextureScale = new Vector2(400f, 400f); // ~1 km grid cells across the 400 km plane
         }
 
         private Texture2D? _gridTex;

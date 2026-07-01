@@ -37,14 +37,14 @@ namespace KSPClone.Client
         // θ so tan(θ) ≤ 0.4, i.e. the mesh radius never exceeds 0.4·ShellRadius.
         private const float MaxAngularRadiusRad = 0.3805f; // atan(0.4)
 
-        // Skip the body you're standing on only for the first ~15 km of altitude
-        // (distance ≤ radius · this factor): near the pad the ground grid is the
-        // surface, and the ZTest-Always billboard would paint a "marble" over it.
-        // Past ~15 km the grid has receded, so the body reappears as the globe —
-        // handing off with no empty gap. (R+15 km)/R ≈ 1.00235 for Earth. A real
-        // curved horizon/terrain needs scaled space (kept out of the flat render
-        // frame by ADR-0015) and is a future slice.
-        private const float SurfaceSkipFactor = 1.00235f;
+        // Skip the body you're standing on until the ground grid has receded
+        // (distance ≤ radius · this factor ≈ +250 km altitude): below that the
+        // grid is the surface, and the ZTest-Always billboard would paint a flat
+        // disk over it. Past ~250 km the grid shrinks toward its far clip, so the
+        // body reappears as the globe with no empty gap. (R+250 km)/R ≈ 1.0392.
+        // A real curved horizon/terrain needs scaled space (kept out of the flat
+        // render frame by ADR-0015) and is a future slice.
+        private const float SurfaceSkipFactor = 1.0392f;
 
         // Glow shell sits behind the body disk at a larger radius. Drawn with
         // alpha so it fades into the sky.
