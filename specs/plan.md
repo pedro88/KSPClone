@@ -25,7 +25,7 @@
 - **Sim core (engine-agnostic C#):** fixed-step scheduler, master clock, warp state machine (vote + auto-limit), patched-conics propagator, bubble manager, rigid-body integrator. Runs identically headless and in-client. *Constitution Art. 1, 2, 3.*
 - **Replication layer:** authoritative snapshot emitter (20–30 Hz), client predictor/reconciler for the controlled vessel, interpolator for the rest, input channel per station.
 - **Persistence layer:** in-memory world ↔ Postgres write-through; schemas for `program`, `vessel` (orbital elements / JSONB snapshot), `design` + `design_node` (part trees), `tech`, `science`.
-- **Design system (separate path):** part-tree model, edit op-log, subtree locks, launch → instantiate. Realized as the `KSPClone.Construction` assembly (references *nothing* — Art. 7 enforced by the compiler), with `KSPClone.Launch` the sole assembly bridging to flight and `DesignStore` for persistence (ADR-0020). *Constitution Art. 7.*
+- **Design system (separate path):** part-tree model, edit op-log, subtree locks, launch → instantiate. Realized as the `KSPClone.Construction` assembly (references *nothing* — Art. 7 enforced by the compiler) with a KSP-like `StockParts` catalogue, `KSPClone.Launch` the sole assembly bridging to flight (builds engines + wet mass), and `DesignStore` for persistence (ADR-0020). Wired end-to-end over the transport (`ServerVabHost`/`ClientVabModel`) with a VAB UI; a launched craft flies on the M2.5 surface pad. *Constitution Art. 7.*
 - **Comms system:** CommNet link evaluation, blackout gating, in-game comms channel, ground-control read-model.
 - **Client presentation:** rendering, input → station routing, map/telemetry views.
 
