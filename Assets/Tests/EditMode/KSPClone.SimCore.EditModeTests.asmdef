@@ -4,6 +4,7 @@
     "references": [
         "KSPClone.SimCore",
         "KSPClone.Net",
+        "KSPClone.Construction",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
