@@ -29,6 +29,7 @@ namespace KSPClone.Client
         // (PERSIST-3). Bodies never change during a session, so we don't
         // rebuild the registry every frame.
         private BodyRegistry _seedBodies;
+        public BodyRegistry SeedBodies => _seedBodies; // read-only, for the nav HUD
         private float _lastThrottle;
         private Vector3 _lastAttitude;
 

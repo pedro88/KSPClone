@@ -25,23 +25,43 @@ namespace KSPClone.Client
             var peer = _client != null ? _client.Peer : null;
             if (peer == null) return;
 
-            // Flight readout for the controlled vessel (predicted state).
+            // Nav readout for the controlled vessel (predicted state). "Up" is
+            // radial from the parent body's centre, not from the world origin —
+            // on a surface launch the body is ~1 AU from the Sun, so origin-radial
+            // would be meaningless (ADR-0018).
             var flight = _client.Flight;
             if (flight.ControlledVesselId is not null && flight.ControlledState.Position.LengthSquared >= 1.0)
             {
                 var pos = flight.ControlledState.Position;
                 var vel = flight.ControlledState.Velocity;
-                _spawn ??= pos;   // captured only once the position is real (reconciled)
-                double rmag = pos.Length;
-                var up = rmag > 1e-6 ? pos * (1.0 / rmag) : new Vector3d(0, 1, 0);
-                double vertical = Vector3d.Dot(vel, up);
-                double altitude = rmag - _spawn.Value.Length;   // height gained since launch
+                _spawn ??= pos;
 
-                GUILayout.BeginArea(new Rect(10, 10, 240, 110), GUI.skin.box);
-                GUILayout.Label("== FLIGHT ==");
-                GUILayout.Label($"speed     : {vel.Length:F1} m/s");
+                var bodies = _client.SeedBodies;
+                var parentId = peer.World.Vessels.TryGetValue(flight.ControlledVesselId.Value, out var cv)
+                    ? cv.Orbit.ParentBody : CelestialBodyId.Planet;
+                var bodyCentre = bodies != null ? bodies.WorldPositionOf(parentId, peer.ServerGameTime) : new Vector3d(0, 0, 0);
+
+                var radial = pos - bodyCentre;
+                double dist = radial.Length;
+                var up = dist > 1e-6 ? radial * (1.0 / dist) : new Vector3d(0, 1, 0);
+                double altitude = dist - WorldSeed.EarthRadius;   // above Earth's surface
+                double speed = vel.Length;
+                double vertical = Vector3d.Dot(vel, up);
+                double horizontal = System.Math.Sqrt(System.Math.Max(0.0, speed * speed - vertical * vertical));
+                // Flight-path angle: +90° = straight up, 0° = horizontal.
+                double fpaDeg = speed > 1e-3
+                    ? System.Math.Asin(System.Math.Max(-1.0, System.Math.Min(1.0, vertical / speed))) * (180.0 / System.Math.PI)
+                    : 0.0;
+
+                GUILayout.BeginArea(new Rect(10, 10, 250, 150), GUI.skin.box);
+                GUILayout.Label("== NAV ==");
+                GUILayout.Label(altitude < 10_000.0
+                    ? $"altitude  : {altitude:F0} m ASL"
+                    : $"altitude  : {altitude / 1000.0:F1} km ASL");
+                GUILayout.Label($"speed     : {speed:F1} m/s");
                 GUILayout.Label($"vertical  : {vertical:+0.0;-0.0;0.0} m/s");
-                GUILayout.Label($"altitude  : {altitude:F0} m (since launch)");
+                GUILayout.Label($"horizontal: {horizontal:F1} m/s");
+                GUILayout.Label($"path angle: {fpaDeg:+0.0;-0.0;0.0}°");
                 GUILayout.EndArea();
             }
 
