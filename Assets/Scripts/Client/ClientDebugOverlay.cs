@@ -158,14 +158,21 @@ namespace KSPClone.Client
             var tree = vab.Replica!.Tree;
             if (_vabSelected.IsNone || !tree.Contains(_vabSelected)) _vabSelected = tree.Root;
 
-            GUILayout.Label($"selected: {NodeLabel(vab, _vabSelected)}");
+            // Live rocket stats (adapt as parts change).
+            var st = DesignStats.Compute(tree, vab.Catalog);
+            GUILayout.Label($"ROCKET: {st.PartCount} parts   wet {st.WetMassKg / 1000.0:F2} t  (dry {st.DryMassKg / 1000.0:F2} t)");
+            string twr = st.ThrustN > 0 ? $"TWR {st.TwrEarthSurface:F2}{(st.TwrEarthSurface < 1 ? " (!)" : "")}" : "no engine";
+            GUILayout.Label($"fuel {st.PropellantKg / 1000.0:F2} t   thrust {st.ThrustN / 1000.0:F0} kN   {twr}   dv {st.DeltaVMps:F0} m/s");
+
+            GUILayout.Space(4);
+            GUILayout.Label($"selected: {NodeLabel(vab, _vabSelected)}   {SelectedPartStats(vab, _vabSelected)}");
             var free = vab.FreeAttachPoints(_vabSelected).FirstOrDefault();
 
             GUILayout.Label(free != null ? $"add part (attach '{free}'):" : "selection has no free attach point");
             foreach (var pt in vab.Catalog.All)
             {
                 GUI.enabled = free != null;
-                if (GUILayout.Button($"+ {pt.DisplayName}")) vab.AddPart(pt.Id, _vabSelected, free);
+                if (GUILayout.Button($"+ {PartLabel(pt)}")) vab.AddPart(pt.Id, _vabSelected, free);
                 GUI.enabled = true;
             }
 
@@ -199,6 +206,24 @@ namespace KSPClone.Client
                 vab.Catalog.TryGet(n.PartType, out var type))
                 return $"{type.DisplayName} (#{id.Value})";
             return $"#{id.Value}";
+        }
+
+        // Compact per-part-type spec for the catalogue buttons.
+        private static string PartLabel(PartType pt)
+        {
+            if (pt.IsEngine)
+                return $"{pt.DisplayName}  [{pt.DryMassKg:F0} kg, {pt.EngineThrustN / 1000.0:F0} kN, Isp {pt.EngineIspS:F0}]";
+            if (pt.PropellantKg > 0)
+                return $"{pt.DisplayName}  [{pt.DryMassKg:F0} kg + {pt.PropellantKg:F0} fuel]";
+            return $"{pt.DisplayName}  [{pt.DryMassKg:F0} kg]";
+        }
+
+        private static string SelectedPartStats(ClientVabModel vab, NodeId id)
+        {
+            if (vab.Replica != null && vab.Replica.Tree.TryGet(id, out var n) &&
+                vab.Catalog.TryGet(n.PartType, out var t))
+                return t.IsEngine ? $"{t.EngineThrustN / 1000.0:F0} kN" : $"{t.DryMassKg:F0} kg{(t.PropellantKg > 0 ? $" +{t.PropellantKg:F0} fuel" : "")}";
+            return "";
         }
 
         // Surface radius of a parent body (metres), for altitude-above-surface.
