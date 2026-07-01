@@ -37,13 +37,14 @@ namespace KSPClone.Client
         // θ so tan(θ) ≤ 0.4, i.e. the mesh radius never exceeds 0.4·ShellRadius.
         private const float MaxAngularRadiusRad = 0.3805f; // atan(0.4)
 
-        // Skip a body only when the camera is at or below its centre (distance ≤
-        // radius · this factor) — a degenerate case, not a real view. On the
-        // surface (distance = radius + a few metres) the body still draws: the
-        // MaxAngularRadius clamp keeps its mesh well inside ShellRadius, so it
-        // shows as a large disk "below" instead of engulfing the camera. A real
-        // curved-horizon/terrain layer is a future slice.
-        private const float SurfaceSkipFactor = 1.0f;
+        // Skip the body you're standing on (distance ≤ radius · this factor):
+        // near a surface it's the ground under your feet, not sky. Drawing it as
+        // a shell billboard straight down would put a floating convex "marble"
+        // beneath the pad — more confusing than absent. The ground you see is the
+        // client's launch-pad plane; a real curved horizon/terrain (needs scaled
+        // space, which ADR-0015 keeps out of the flat render frame) is a future
+        // slice. Above ~0.1·radius altitude the body reappears as a sky billboard.
+        private const float SurfaceSkipFactor = 1.1f;
 
         // Glow shell sits behind the body disk at a larger radius. Drawn with
         // alpha so it fades into the sky.

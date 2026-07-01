@@ -23,7 +23,10 @@ namespace KSPClone.Client
         // scroll to zoom. Always looks at the craft. Seeded to a slight
         // top-down-behind framing.
         private float _camYaw;
-        private float _camPitch = 15f;
+        // Seed a stronger downward tilt so the ground pad (a horizontal +Y plane,
+        // invisible edge-on) and the body directly below the craft on a surface
+        // launch are both in frame from the start. Right-drag still overrides.
+        private float _camPitch = 30f;
         private float _camDistance = 18f;
         private const float OrbitSpeed = 6f;
         private const float ZoomSpeed = 4f;
@@ -182,7 +185,7 @@ namespace KSPClone.Client
             _ground = GameObject.CreatePrimitive(PrimitiveType.Plane); // 10×10 m, normal +Y
             _ground.name = "LaunchPadGround";
             Object.Destroy(_ground.GetComponent<Collider>()); // presentation only (no contact)
-            _ground.transform.localScale = new Vector3(8f, 1f, 8f); // ~80 m square
+            _ground.transform.localScale = new Vector3(40f, 1f, 40f); // ~400 m square — reads as ground, not a tile
             _ground.GetComponent<Renderer>().material.color = new Color(0.40f, 0.44f, 0.52f);
         }
 
