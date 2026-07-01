@@ -33,7 +33,7 @@ namespace KSPClone.Client
         // alpha so it fades into the sky.
         private const float GlowRadiusFactor = 2.4f;
 
-        private readonly Transform? _camera;
+        private Transform? _camera; // resolved lazily — Camera.main can be null at Start
         private GameObject? _shell;
         private readonly Dictionary<CelestialBodyId, BodyVisual> _bodies = new();
 
@@ -55,6 +55,10 @@ namespace KSPClone.Client
             double gameTime,
             Vector3d sunDirectionWorld)
         {
+            // Camera.main may not have existed when this renderer was built;
+            // resolve it here so the shell comes alive once it does (matches
+            // ClientWorldRenderer). Without this the skybox stays dark forever.
+            _camera ??= Camera.main != null ? Camera.main.transform : null;
             if (_camera == null) return;
             EnsureShell();
             EnsureBodies();
@@ -98,10 +102,13 @@ namespace KSPClone.Client
             if (_bodies.TryGetValue(CelestialBodyId.Moon, out var moon))
             {
                 var mr = moon.Disk.GetComponent<Renderer>();
-                if (mr != null && mr.material != null)
+                if (mr != null && mr.sharedMaterial != null)
                 {
+                    // Each body owns a unique material (MakeMaterial news one per
+                    // body), so writing sharedMaterial is safe and avoids the
+                    // per-renderer copy that reading `.material` would allocate.
                     var sun = new Vector3((float)sunDirectionWorld.X, (float)sunDirectionWorld.Y, (float)sunDirectionWorld.Z);
-                    mr.material.SetVector("_SunDir",
+                    mr.sharedMaterial.SetVector("_SunDir",
                         new Vector4(sun.x, sun.y, sun.z, 0));
                 }
             }
@@ -126,12 +133,13 @@ namespace KSPClone.Client
         private void EnsureShell()
         {
             if (_shell != null) return;
-            _shell = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            _shell.name = "CelestialSkyboxShell";
-            Object.Destroy(_shell.GetComponent<Collider>());
-            // Invert the sphere so the camera sits *inside* it and we see the
-            // back faces. Flip scale on X to mirror the winding.
-            _shell.transform.localScale = Vector3.one * (ShellRadius * 2f);
+            // Pure anchor transform (scale 1, no mesh). It only carries the
+            // float-local frame so the bodies ride the camera. A *scaled*
+            // primitive here would multiply every child's localPosition and
+            // localScale by ShellRadius*2 — bodies flew to ~20 km and clipped
+            // out of the frustum, so the sky read as empty. ShellRadius is
+            // applied per-body in unscaled metres instead.
+            _shell = new GameObject("CelestialSkyboxShell");
             _shell.transform.position = Vector3.zero;
         }
 

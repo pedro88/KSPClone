@@ -25,6 +25,10 @@ namespace KSPClone.Client
         private ClientNetPeer _peer;
         private ClientWorldRenderer _renderer;
         private CelestialSkyboxRenderer _skybox;
+        // Deterministic seed hierarchy, reconstructed once client-side
+        // (PERSIST-3). Bodies never change during a session, so we don't
+        // rebuild the registry every frame.
+        private BodyRegistry _seedBodies;
         private float _lastThrottle;
         private Vector3 _lastAttitude;
 
@@ -38,6 +42,7 @@ namespace KSPClone.Client
             Peer.SnapshotReceived += Flight.OnSnapshotBundle;
             _renderer = new ClientWorldRenderer(Camera.main != null ? Camera.main.transform : null);
             _skybox = new CelestialSkyboxRenderer(Camera.main != null ? Camera.main.transform : null);
+            _seedBodies = WorldSeed.CreateBodies();
             _transport.Connect(_host, _port);
             Debug.Log($"[client] connecting to {_host}:{_port}");
         }
@@ -84,10 +89,9 @@ namespace KSPClone.Client
                 if (cam != null)
                 {
                     var pos = Flight.ControlledState.Position;
-                    var bodies = WorldSeed.CreateBodies();
-                    var sunDir = (Vector3d)bodies.WorldPositionOf(CelestialBodyId.Sun, Flight.ServerGameTime)
-                                 - (Vector3d)pos;
-                    _skybox.Render(bodies, pos, Flight.ServerGameTime, sunDir);
+                    var sunDir = _seedBodies.WorldPositionOf(CelestialBodyId.Sun, Flight.ServerGameTime)
+                                 - pos;
+                    _skybox.Render(_seedBodies, pos, Flight.ServerGameTime, sunDir);
                 }
             }
         }
