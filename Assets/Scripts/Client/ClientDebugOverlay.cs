@@ -53,7 +53,7 @@ namespace KSPClone.Client
                     ? System.Math.Asin(System.Math.Max(-1.0, System.Math.Min(1.0, vertical / speed))) * (180.0 / System.Math.PI)
                     : 0.0;
 
-                GUILayout.BeginArea(new Rect(10, 10, 250, 150), GUI.skin.box);
+                GUILayout.BeginArea(new Rect(Screen.width - 260, Screen.height - 170, 250, 160), GUI.skin.box);
                 GUILayout.Label("== NAV ==");
                 GUILayout.Label(altitude < 10_000.0
                     ? $"altitude  : {altitude:F0} m ASL"
