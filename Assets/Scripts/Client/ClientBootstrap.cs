@@ -27,6 +27,8 @@ namespace KSPClone.Client
         // prediction close to the server so reconciliation barely corrects.
         public ClientFlightModel Flight { get; } = new(new TrivialPredictionStep(thrustAccel: 30.0));
         public ClientVabModel Vab { get; private set; } // VAB (M3): shared Design editing + launch
+        public bool VabOpen { get; private set; }       // toggled by B; shared by the overlay + 3D preview
+        private VabPreview _vabPreview;
 
         private LiteNetLibClientTransport _transport;
         private ClientNetPeer _peer;
@@ -52,6 +54,7 @@ namespace KSPClone.Client
             _skybox = new CelestialSkyboxRenderer(Camera.main != null ? Camera.main.transform : null);
             _seedBodies = WorldSeed.CreateBodies();
             Vab = new ClientVabModel(Peer);
+            _vabPreview = new VabPreview();
             Peer.DesignLaunchedReceived += OnDesignLaunched;
             _transport.Connect(_host, _port);
             Debug.Log($"[client] connecting to {_host}:{_port}");
@@ -84,6 +87,7 @@ namespace KSPClone.Client
         private void Update()
         {
             Peer?.Poll();
+            if (Input.GetKeyDown(KeyCode.B)) VabOpen = !VabOpen;
             if (Flight.ControlledVesselId is null) return;
 
             // Analog throttle (KSP-style): Shift ramps up, Ctrl down, X cuts to
@@ -112,6 +116,7 @@ namespace KSPClone.Client
         private void LateUpdate()
         {
             _renderer?.Render(Flight, _lastThrottle, _lastAttitude);
+            _vabPreview?.Tick(Camera.main, Vab, VabOpen); // live 3D VAB preview + mouse placement
             // Skybox rides the same float-local frame as the renderer; the
             // controlled vessel anchors the camera, so bodies' world positions
             // resolve to local directions on the inverted-sphere shell.
@@ -135,6 +140,7 @@ namespace KSPClone.Client
         {
             _renderer?.Clear();
             _skybox?.Clear();
+            _vabPreview?.Dispose();
             _transport?.Dispose();
         }
     }

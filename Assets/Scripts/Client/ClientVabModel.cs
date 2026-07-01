@@ -27,6 +27,13 @@ namespace KSPClone.Client
         public IReadOnlyDictionary<NodeId, Guid> Locks => _locks;
         public string LastAck { get; private set; } = "";
 
+        // Shared UI state (IMGUI palette + 3D preview): the currently selected
+        // node and the part "armed" for mouse placement onto an attach marker.
+        public NodeId Selected { get; set; } = NodeId.None;
+        public PartTypeId? ArmedPart { get; private set; }
+        public void Arm(PartTypeId type) => ArmedPart = type;
+        public void Disarm() => ArmedPart = null;
+
         public ClientVabModel(ClientNetPeer peer)
         {
             _peer = peer;

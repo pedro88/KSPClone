@@ -25,8 +25,6 @@ namespace KSPClone.Client
         // altitude against the *live* Earth centre makes it plummet even at rest.
         // We freeze the launch vertical (up0) and pad altitude here and measure
         // climb along that instead — stable for the demo (ADR-0018 approximation).
-        private bool _vabOpen;
-        private NodeId _vabSelected = NodeId.None;
         private Vector2 _vabScroll;
         private Vector3d? _spawn;
         private Vector3d _up0 = new(0, 1, 0);
@@ -133,12 +131,7 @@ namespace KSPClone.Client
             GUILayout.Label("B : open/close the VAB (build + launch)");
             GUILayout.EndArea();
 
-            if (_vabOpen) DrawVab();
-        }
-
-        private void Update()
-        {
-            if (Input.GetKeyDown(KeyCode.B)) _vabOpen = !_vabOpen;
+            if (_client.VabOpen) DrawVab();
         }
 
         // Collaborative VAB (M3): browse the shared Design, add/remove/move parts,
@@ -146,8 +139,10 @@ namespace KSPClone.Client
         private void DrawVab()
         {
             var vab = _client != null ? _client.Vab : null;
-            GUILayout.BeginArea(new Rect(Screen.width / 2 - 230, 30, 460, Screen.height - 90), GUI.skin.box);
+            // Left column (the 3D preview floats on the right; see VabPreview).
+            GUILayout.BeginArea(new Rect(10, 30, 380, Screen.height - 70), GUI.skin.box);
             GUILayout.Label("== VAB — Demo Rocket (B to close) ==");
+            GUILayout.Label("arm a part, click a green marker on the right to attach");
             if (vab == null || !vab.Ready)
             {
                 GUILayout.Label("joining shared Design…");
@@ -156,7 +151,7 @@ namespace KSPClone.Client
             }
 
             var tree = vab.Replica!.Tree;
-            if (_vabSelected.IsNone || !tree.Contains(_vabSelected)) _vabSelected = tree.Root;
+            if (vab.Selected.IsNone || !tree.Contains(vab.Selected)) vab.Selected = tree.Root;
 
             // Live rocket stats (adapt as parts change).
             var st = DesignStats.Compute(tree, vab.Catalog);
@@ -165,36 +160,35 @@ namespace KSPClone.Client
             GUILayout.Label($"fuel {st.PropellantKg / 1000.0:F2} t   thrust {st.ThrustN / 1000.0:F0} kN   {twr}   dv {st.DeltaVMps:F0} m/s");
 
             GUILayout.Space(4);
-            GUILayout.Label($"selected: {NodeLabel(vab, _vabSelected)}   {SelectedPartStats(vab, _vabSelected)}");
-            var free = vab.FreeAttachPoints(_vabSelected).FirstOrDefault();
+            GUILayout.Label($"selected: {NodeLabel(vab, vab.Selected)}   {SelectedPartStats(vab, vab.Selected)}");
+            string armed = vab.ArmedPart is { } a && vab.Catalog.TryGet(a, out var at) ? at.DisplayName : "none";
+            GUILayout.Label($"armed: {armed}  — click a green marker in 3D to attach");
 
-            GUILayout.Label(free != null ? $"add part (attach '{free}'):" : "selection has no free attach point");
+            GUILayout.Label("parts (click to arm):");
             foreach (var pt in vab.Catalog.All)
-            {
-                GUI.enabled = free != null;
-                if (GUILayout.Button($"+ {PartLabel(pt)}")) vab.AddPart(pt.Id, _vabSelected, free);
-                GUI.enabled = true;
-            }
+                if (GUILayout.Button($"{(vab.ArmedPart is { } ap && ap.Equals(pt.Id) ? "* " : "")}{PartLabel(pt)}"))
+                    vab.Arm(pt.Id);
+            if (GUILayout.Button("disarm")) vab.Disarm();
 
             GUILayout.Space(4);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Remove")) vab.RemovePart(_vabSelected);
-            if (GUILayout.Button("Claim lock")) vab.ClaimLock(_vabSelected);
-            if (GUILayout.Button("Release lock")) vab.ReleaseLock(_vabSelected);
+            if (GUILayout.Button("Remove")) vab.RemovePart(vab.Selected);
+            if (GUILayout.Button("Claim lock")) vab.ClaimLock(vab.Selected);
+            if (GUILayout.Button("Release lock")) vab.ReleaseLock(vab.Selected);
             GUILayout.EndHorizontal();
             if (GUILayout.Button(">> LAUNCH to pad <<")) vab.Launch();
             GUILayout.Label($"last edit: {vab.LastAck}");
 
             GUILayout.Space(4);
-            GUILayout.Label("Tree (click to select):");
+            GUILayout.Label("Tree (click to select; 3D: click a part to select):");
             _vabScroll = GUILayout.BeginScrollView(_vabScroll);
             foreach (var id in tree.Subtree(tree.Root))
             {
                 int depth = tree.Ancestors(id).Count();
                 string lockStr = vab.Locks.TryGetValue(id, out var h) ? $"   [LOCK {h.ToString().Substring(0, 4)}]" : "";
-                string mark = id.Equals(_vabSelected) ? "> " : "   ";
+                string mark = id.Equals(vab.Selected) ? "> " : "   ";
                 if (GUILayout.Button(mark + new string(' ', depth * 2) + NodeLabel(vab, id) + lockStr, GUILayout.ExpandWidth(true)))
-                    _vabSelected = id;
+                    vab.Selected = id;
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
