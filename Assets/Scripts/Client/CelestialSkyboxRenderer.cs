@@ -29,6 +29,22 @@ namespace KSPClone.Client
         // Apparent angular floor (radians). ~2° = 35 mrad.
         private const float MinAngularRadiusRad = 0.035f;
 
+        // Apparent angular ceiling. The skybox is a *sky* layer: bodies live on
+        // a shell at ShellRadius and their mesh radius is ShellRadius·tan(θ). If
+        // θ approaches 90° (which it does the instant the camera nears a body's
+        // surface — distance → radius → atan(1) = 45°, and worse below) the mesh
+        // grows to engulf the camera and you end up *inside* a giant sphere. Cap
+        // θ so tan(θ) ≤ 0.4, i.e. the mesh radius never exceeds 0.4·ShellRadius.
+        private const float MaxAngularRadiusRad = 0.3805f; // atan(0.4)
+
+        // Skip a body only when the camera is at or below its centre (distance ≤
+        // radius · this factor) — a degenerate case, not a real view. On the
+        // surface (distance = radius + a few metres) the body still draws: the
+        // MaxAngularRadius clamp keeps its mesh well inside ShellRadius, so it
+        // shows as a large disk "below" instead of engulfing the camera. A real
+        // curved-horizon/terrain layer is a future slice.
+        private const float SurfaceSkipFactor = 1.0f;
+
         // Glow shell sits behind the body disk at a larger radius. Drawn with
         // alpha so it fades into the sky.
         private const float GlowRadiusFactor = 2.4f;
@@ -72,12 +88,23 @@ namespace KSPClone.Client
                 var bodyWorldPos = registry.WorldPositionOf(kv.Key, gameTime);
                 var toBody = bodyWorldPos - cameraWorldPos;
                 double distance = toBody.Length;
-                if (distance < 1.0) continue; // degenerate: camera inside the body
+
+                // Skip the body you're standing on: at/near the surface it is
+                // ground, not sky, and a shell billboard would engulf the camera.
+                double physicalRadius = PhysicalRadiusOf(kv.Key);
+                if (distance <= physicalRadius * SurfaceSkipFactor || distance < 1.0)
+                {
+                    kv.Value.Disk.SetActive(false);
+                    kv.Value.Glow?.SetActive(false);
+                    continue;
+                }
+                kv.Value.Disk.SetActive(true);
+                kv.Value.Glow?.SetActive(true);
 
                 var dir = new Vector3((float)(toBody.X / distance), (float)(toBody.Y / distance), (float)(toBody.Z / distance));
                 double realAngularRadius = ComputeRealAngularRadius(kv.Key, distance);
-                float apparentAngularRadius = Mathf.Max(
-                    (float)realAngularRadius, MinAngularRadiusRad);
+                float apparentAngularRadius = Mathf.Clamp(
+                    (float)realAngularRadius, MinAngularRadiusRad, MaxAngularRadiusRad);
 
                 // Mesh radius (metres on the shell) from apparent angular size:
                 //   meshRadius = ShellRadius * tan(apparentAngularRadius)
@@ -119,16 +146,20 @@ namespace KSPClone.Client
         // the body has no finite radius (Sun has +∞ SOI in the seed).
         private static double ComputeRealAngularRadius(CelestialBodyId id, double distance)
         {
-            double physicalRadius = id switch
-            {
-                CelestialBodyId.Sun   => 6.957e8,           // 695.7 Mm
-                CelestialBodyId.Planet => 6.371e6,          // 6.371 Mm
-                CelestialBodyId.Moon  => 1.737e6,          // 1.737 Mm
-                _ => 0.0,
-            };
+            double physicalRadius = PhysicalRadiusOf(id);
             if (physicalRadius <= 0.0 || distance <= 0.0) return 0.0;
             return System.Math.Atan(physicalRadius / distance);
         }
+
+        // Physical body radii (metres). Presentation-only sizing; the sim core
+        // never reads these (bodies carry SOI radii, not draw radii).
+        private static double PhysicalRadiusOf(CelestialBodyId id) => id switch
+        {
+            CelestialBodyId.Sun    => 6.957e8, // 695.7 Mm
+            CelestialBodyId.Planet => 6.371e6, // 6.371 Mm
+            CelestialBodyId.Moon   => 1.737e6, // 1.737 Mm
+            _ => 0.0,
+        };
 
         private void EnsureShell()
         {
