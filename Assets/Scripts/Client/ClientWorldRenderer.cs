@@ -64,6 +64,13 @@ namespace KSPClone.Client
         private GameObject? _ground;
         private Vector3d? _padWorld;
 
+        // Ground grid extent + the far clip needed to keep it visible high into
+        // the climb. The plane is ~30 km across and drawn world-relative, so it
+        // recedes as a shrinking grid up to tens of km of altitude — bridging to
+        // where the skybox Earth globe takes over (no empty gap below).
+        private const float GroundHalfSpanScale = 3000f; // Unity plane base 10 m → ~30 km
+        private const float GroundFarClip = 40000f;       // metres
+
         public ClientWorldRenderer(Transform? camera = null)
         {
             _camera = camera;
@@ -144,6 +151,12 @@ namespace KSPClone.Client
         // even though the vessel itself can't yet show its attitude.
         private void UpdateCamera(Vector3 target)
         {
+            // Push the far clip out so the large receding ground grid stays
+            // visible for tens of km of ascent — long enough to hand off to the
+            // skybox Earth globe with no gap of empty space below.
+            var cam = _camera!.GetComponent<Camera>();
+            if (cam != null && cam.farClipPlane < GroundFarClip) cam.farClipPlane = GroundFarClip;
+
             if (Input.GetMouseButton(1))
             {
                 _camYaw += Input.GetAxis("Mouse X") * OrbitSpeed;
@@ -185,15 +198,15 @@ namespace KSPClone.Client
             _ground = GameObject.CreatePrimitive(PrimitiveType.Plane); // 10 m base, normal +Y
             _ground.name = "LaunchPadGround";
             Object.Destroy(_ground.GetComponent<Collider>()); // presentation only (no contact)
-            // ~2 km square: it's world-pinned and rendered relative to the craft,
+            // ~30 km square: it's world-pinned and rendered relative to the craft,
             // so it slides downward as you climb — a big grid makes that motion
-            // (and thus altitude) legible, and stays on-screen through the first
-            // couple of km of ascent before it recedes past the far clip.
-            _ground.transform.localScale = new Vector3(200f, 1f, 200f);
+            // (and thus altitude) legible, and with the pushed-out far clip it
+            // stays on-screen for tens of km, until the skybox Earth globe appears.
+            _ground.transform.localScale = new Vector3(GroundHalfSpanScale, 1f, GroundHalfSpanScale);
             var mat = _ground.GetComponent<Renderer>().material;
             mat.color = Color.white;                       // let the texture's colours show
             mat.mainTexture = GroundGridTexture();
-            mat.mainTextureScale = new Vector2(40f, 40f);  // ~50 m grid cells across the 2 km plane
+            mat.mainTextureScale = new Vector2(60f, 60f);  // ~500 m grid cells across the 30 km plane
         }
 
         private Texture2D? _gridTex;

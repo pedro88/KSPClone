@@ -37,14 +37,14 @@ namespace KSPClone.Client
         // θ so tan(θ) ≤ 0.4, i.e. the mesh radius never exceeds 0.4·ShellRadius.
         private const float MaxAngularRadiusRad = 0.3805f; // atan(0.4)
 
-        // Skip the body you're standing on (distance ≤ radius · this factor):
-        // near a surface it's the ground under your feet, not sky. Drawing it as
-        // a shell billboard straight down would put a floating convex "marble"
-        // beneath the pad — more confusing than absent. The ground you see is the
-        // client's launch-pad plane; a real curved horizon/terrain (needs scaled
-        // space, which ADR-0015 keeps out of the flat render frame) is a future
-        // slice. Above ~0.1·radius altitude the body reappears as a sky billboard.
-        private const float SurfaceSkipFactor = 1.1f;
+        // Skip the body you're standing on only for the first ~15 km of altitude
+        // (distance ≤ radius · this factor): near the pad the ground grid is the
+        // surface, and the ZTest-Always billboard would paint a "marble" over it.
+        // Past ~15 km the grid has receded, so the body reappears as the globe —
+        // handing off with no empty gap. (R+15 km)/R ≈ 1.00235 for Earth. A real
+        // curved horizon/terrain needs scaled space (kept out of the flat render
+        // frame by ADR-0015) and is a future slice.
+        private const float SurfaceSkipFactor = 1.00235f;
 
         // Glow shell sits behind the body disk at a larger radius. Drawn with
         // alpha so it fades into the sky.
