@@ -213,5 +213,13 @@ namespace KSPClone.Net
         Snapshot = 2,
         ClientCommand = 3,
         PilotInput = 4,
+        // Design/VAB replication channel (M3-T04) — logically separate from the
+        // vessel snapshot/interpolation path (Art. 7).
+        JoinDesign = 5,
+        LeaveDesign = 6,
+        DesignSnapshot = 7,
+        EditOpSubmit = 8,
+        EditOpAck = 9,
+        EditOpBroadcast = 10,
     }
 }
