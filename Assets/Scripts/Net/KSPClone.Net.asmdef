@@ -3,7 +3,8 @@
     "rootNamespace": "KSPClone.Net",
     "references": [
         "KSPClone.SimCore",
-        "KSPClone.Construction"
+        "KSPClone.Construction",
+        "KSPClone.Launch"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

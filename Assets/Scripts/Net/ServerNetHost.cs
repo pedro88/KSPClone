@@ -14,6 +14,7 @@ namespace KSPClone.Net
     {
         private readonly IServerTransport _transport;
         private readonly ServerSimulation _sim;
+        private readonly ServerVabHost _vab;
         private readonly Dictionary<int, PlayerId> _peerToPlayer = new();
         private readonly Dictionary<PlayerId, int> _playerToPeer = new();
 
@@ -21,10 +22,17 @@ namespace KSPClone.Net
         {
             _transport = transport;
             _sim = sim;
+            _vab = new ServerVabHost(sim, SendToPlayer);
             _transport.PeerConnected += OnPeerConnected;
             _transport.PeerDisconnected += OnPeerDisconnected;
             _transport.Received += OnReceived;
             _sim.SnapshotEmitted += OnSnapshot;
+        }
+
+        private void SendToPlayer(System.Guid player, byte[] bytes)
+        {
+            if (_playerToPeer.TryGetValue(new PlayerId(player), out var peer))
+                _transport.Send(peer, bytes);
         }
 
         public void Poll() => _transport.Poll();
@@ -40,6 +48,7 @@ namespace KSPClone.Net
         private void OnPeerDisconnected(int peerId)
         {
             if (!_peerToPlayer.TryGetValue(peerId, out var pid)) return;
+            _vab.OnPlayerDisconnect(pid.Value);
             _sim.Disconnect(pid);
             _peerToPlayer.Remove(peerId);
             _playerToPeer.Remove(pid);
@@ -57,6 +66,10 @@ namespace KSPClone.Net
                 case MessageType.PilotInput:
                     // Authority is checked server-side against the Pilot occupant (ADR-0016).
                     _sim.SubmitPilotInput(pid, WireCodec.DecodePilotInput(data));
+                    break;
+                default:
+                    // Design/VAB channel (tags 5–14) — routed to the construction host.
+                    _vab.Handle(pid.Value, data);
                     break;
             }
         }

@@ -43,6 +43,32 @@ namespace KSPClone.Net
         public EditOpBroadcastMessage(DesignId d, SequencedEditOp op) { DesignId = d; Op = op; }
     }
 
+    /// <summary>client→server: claim/release a subtree lock on a node (M3-T06).</summary>
+    public readonly struct LockRequestMessage
+    {
+        public readonly DesignId DesignId;
+        public readonly NodeId NodeId;
+        public LockRequestMessage(DesignId d, NodeId n) { DesignId = d; NodeId = n; }
+    }
+
+    /// <summary>server→all editors: a lock changed (claimed or released).</summary>
+    public readonly struct LockBroadcastMessage
+    {
+        public readonly DesignId DesignId;
+        public readonly NodeId NodeId;
+        public readonly Guid Holder;   // default when released
+        public readonly bool Locked;   // true = claimed, false = released
+        public LockBroadcastMessage(DesignId d, NodeId n, Guid holder, bool locked)
+        { DesignId = d; NodeId = n; Holder = holder; Locked = locked; }
+    }
+
+    /// <summary>client→server: launch a Design onto the pad (M3-T08).</summary>
+    public readonly struct LaunchDesignMessage
+    {
+        public readonly DesignId DesignId;
+        public LaunchDesignMessage(DesignId d) { DesignId = d; }
+    }
+
     /// <summary>server→joining editor: full-tree resync baseline (nodes + current seq).</summary>
     public readonly struct DesignSnapshotMessage
     {
@@ -65,6 +91,50 @@ namespace KSPClone.Net
 
         public static DesignId DecodeJoin(byte[] p) => ReadTaggedId(p);
         public static DesignId DecodeLeave(byte[] p) => ReadTaggedId(p);
+
+        public static byte[] EncodeLaunch(LaunchDesignMessage m) => TagAndId(MessageType.LaunchDesign, m.DesignId);
+        public static DesignId DecodeLaunch(byte[] p) => ReadTaggedId(p);
+
+        public static byte[] EncodeClaimLock(LockRequestMessage m) => TagLockReq(MessageType.ClaimLock, m);
+        public static byte[] EncodeReleaseLock(LockRequestMessage m) => TagLockReq(MessageType.ReleaseLock, m);
+
+        public static LockRequestMessage DecodeLockRequest(byte[] p)
+        {
+            using var ms = new MemoryStream(p); using var r = new BinaryReader(ms);
+            r.ReadByte();
+            var d = ReadDesignId(r);
+            var n = new NodeId(r.ReadInt64());
+            return new LockRequestMessage(d, n);
+        }
+
+        public static byte[] EncodeLockBroadcast(LockBroadcastMessage m)
+        {
+            using var ms = new MemoryStream(); using var w = new BinaryWriter(ms);
+            w.Write((byte)MessageType.LockBroadcast);
+            WriteDesignId(w, m.DesignId);
+            w.Write(m.NodeId.Value);
+            w.Write(m.Holder.ToByteArray());
+            w.Write(m.Locked);
+            return ms.ToArray();
+        }
+
+        public static LockBroadcastMessage DecodeLockBroadcast(byte[] p)
+        {
+            using var ms = new MemoryStream(p); using var r = new BinaryReader(ms);
+            r.ReadByte();
+            var d = ReadDesignId(r);
+            var n = new NodeId(r.ReadInt64());
+            var holder = new Guid(r.ReadBytes(16));
+            var locked = r.ReadBoolean();
+            return new LockBroadcastMessage(d, n, holder, locked);
+        }
+
+        private static byte[] TagLockReq(MessageType t, LockRequestMessage m)
+        {
+            using var ms = new MemoryStream(); using var w = new BinaryWriter(ms);
+            w.Write((byte)t); WriteDesignId(w, m.DesignId); w.Write(m.NodeId.Value);
+            return ms.ToArray();
+        }
 
         public static byte[] EncodeSubmit(EditOpSubmitMessage m)
         {

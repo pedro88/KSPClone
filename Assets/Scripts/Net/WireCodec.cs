@@ -221,5 +221,9 @@ namespace KSPClone.Net
         EditOpSubmit = 8,
         EditOpAck = 9,
         EditOpBroadcast = 10,
+        ClaimLock = 11,
+        ReleaseLock = 12,
+        LockBroadcast = 13,
+        LaunchDesign = 14,
     }
 }

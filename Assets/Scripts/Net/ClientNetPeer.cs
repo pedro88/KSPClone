@@ -26,6 +26,25 @@ namespace KSPClone.Net
         /// <summary>Fired for each authoritative snapshot bundle.</summary>
         public event Action<SnapshotBundle>? SnapshotReceived;
 
+        // --- VAB / Design channel (M3) ---
+        public event Action<DesignSnapshotMessage>? DesignSnapshotReceived;
+        public event Action<EditOpBroadcastMessage>? EditOpBroadcastReceived;
+        public event Action<EditOpAckMessage>? EditOpAckReceived;
+        public event Action<LockBroadcastMessage>? LockBroadcastReceived;
+
+        public void JoinDesign(Construction.DesignId d) =>
+            _transport.Send(DesignWireCodec.EncodeJoin(new JoinDesignMessage(d)));
+        public void LeaveDesign(Construction.DesignId d) =>
+            _transport.Send(DesignWireCodec.EncodeLeave(new LeaveDesignMessage(d)));
+        public void SubmitEditOp(Construction.DesignId d, long tempId, Construction.EditOp op) =>
+            _transport.Send(DesignWireCodec.EncodeSubmit(new EditOpSubmitMessage(d, tempId, op)));
+        public void ClaimLock(Construction.DesignId d, Construction.NodeId n) =>
+            _transport.Send(DesignWireCodec.EncodeClaimLock(new LockRequestMessage(d, n)));
+        public void ReleaseLock(Construction.DesignId d, Construction.NodeId n) =>
+            _transport.Send(DesignWireCodec.EncodeReleaseLock(new LockRequestMessage(d, n)));
+        public void LaunchDesign(Construction.DesignId d) =>
+            _transport.Send(DesignWireCodec.EncodeLaunch(new LaunchDesignMessage(d)));
+
         private readonly IClientTransport _transport;
         private readonly Dictionary<VesselId, VesselInterpolator> _interpolators = new();
 
@@ -87,6 +106,19 @@ namespace KSPClone.Net
                         interp.OnSnapshot(snap);
                     }
                     SnapshotReceived?.Invoke(bundle);
+                    break;
+
+                case MessageType.DesignSnapshot:
+                    DesignSnapshotReceived?.Invoke(DesignWireCodec.DecodeSnapshot(data));
+                    break;
+                case MessageType.EditOpBroadcast:
+                    EditOpBroadcastReceived?.Invoke(DesignWireCodec.DecodeBroadcast(data));
+                    break;
+                case MessageType.EditOpAck:
+                    EditOpAckReceived?.Invoke(DesignWireCodec.DecodeAck(data));
+                    break;
+                case MessageType.LockBroadcast:
+                    LockBroadcastReceived?.Invoke(DesignWireCodec.DecodeLockBroadcast(data));
                     break;
             }
         }

@@ -1,5 +1,7 @@
 #nullable enable annotations
 
+using System;
+
 namespace KSPClone.Construction
 {
     /// <summary>
@@ -17,6 +19,12 @@ namespace KSPClone.Construction
         public static readonly PartTypeId Terrier       = new("lv-909-terrier");
         public static readonly PartTypeId Decoupler     = new("tr-18a-decoupler");
         public static readonly PartTypeId NoseCone      = new("aerodynamic-nose-cone");
+
+        /// <summary>Well-known id of the shared demo Design every client joins (like WorldSeed.SeedVesselId).</summary>
+        public static readonly DesignId DemoDesignId = new(new Guid("00000000-0000-0000-0000-0000000000d3"));
+
+        /// <summary>The shared demo Design, seeded with a Mk1 pod as its root.</summary>
+        public static Design CreateDemoDesign() => Design.Create(DemoDesignId, "Demo Rocket", Mk1Pod);
 
         private static AttachPoint Ap(string key, double y) => new(key, new PartPose(0, y, 0, 0, 0, 0, 1));
 
