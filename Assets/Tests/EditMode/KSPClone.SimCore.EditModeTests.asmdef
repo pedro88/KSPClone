@@ -5,6 +5,7 @@
         "KSPClone.SimCore",
         "KSPClone.Net",
         "KSPClone.Construction",
+        "KSPClone.Launch",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
