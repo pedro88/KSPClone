@@ -3,6 +3,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using KSPClone.SimCore;
+using KSPClone.Construction;
 
 namespace KSPClone.Client
 {
@@ -18,6 +19,14 @@ namespace KSPClone.Client
     {
         private readonly Dictionary<VesselId, GameObject> _objects = new();
         private Transform? _camera; // resolved lazily — Camera.main can be null at Start
+
+        // Assembled controlled craft (M3): when a launched vessel's part layout is
+        // set, it renders as its stacked parts (children of the controlled object)
+        // instead of the placeholder capsule.
+        private IReadOnlyList<PlacedPart>? _craftParts;
+        private VesselId? _craftVessel;
+        private readonly List<GameObject> _craftRig = new();
+        private bool _craftBuilt;
 
         // Orbit camera: hold right mouse to swing around the controlled vessel,
         // scroll to zoom. Always looks at the craft. Seeded to a slight
@@ -89,6 +98,9 @@ namespace KSPClone.Client
                     Place(id, flight.ToRenderLocal(world), isControlled: false);
 
             OrientControlled(controlled, flight.ControlledState.Orientation);
+            if (_craftParts != null && _craftVessel is { } cv && cv.Equals(controlled) &&
+                !_craftBuilt && _objects.TryGetValue(controlled, out var craftGo))
+                BuildCraftRig(craftGo);
             RenderGround(flight);
             RenderReferenceField(flight);
             RenderThrust(flight, throttle);
@@ -337,6 +349,41 @@ namespace KSPClone.Client
         private static Quaternion ToUnity(Quaterniond q) =>
             new((float)q.X, (float)q.Y, (float)q.Z, (float)q.W);
 
+        /// <summary>
+        /// Render the controlled vessel as its assembled parts (M3). Call on launch
+        /// with the design's <see cref="PartLayout"/>; the rig is (re)built the next
+        /// frame under the controlled object and rides its attitude.
+        /// </summary>
+        public void SetControlledCraft(VesselId id, IReadOnlyList<PlacedPart> parts)
+        {
+            foreach (var go in _craftRig) if (go != null) Object.Destroy(go);
+            _craftRig.Clear();
+            _craftParts = parts;
+            _craftVessel = id;
+            _craftBuilt = false;
+        }
+
+        private void BuildCraftRig(GameObject parent)
+        {
+            // Hide the placeholder capsule; the parts are the craft now.
+            var placeholder = parent.GetComponent<Renderer>();
+            if (placeholder != null) placeholder.enabled = false;
+
+            foreach (var p in _craftParts!)
+            {
+                var go = GameObject.CreatePrimitive(PartVisuals.Shape(p.PartType));
+                go.name = $"Part_{p.PartType}";
+                Object.Destroy(go.GetComponent<Collider>()); // presentation only
+                go.GetComponent<Renderer>().material.color = PartVisuals.Color(p.PartType);
+                go.transform.SetParent(parent.transform, worldPositionStays: false);
+                go.transform.localPosition = new Vector3(0f, (float)p.CenterY, 0f);
+                float diameter = (float)(p.RadiusM * 2.0);
+                go.transform.localScale = new Vector3(diameter, (float)(p.HeightM / 2.0), diameter);
+                _craftRig.Add(go);
+            }
+            _craftBuilt = true;
+        }
+
         private Texture2D? _bandTex;
 
         private Texture2D BandedTexture()
@@ -364,6 +411,9 @@ namespace KSPClone.Client
             foreach (var go in _objects.Values)
                 if (go != null) Object.Destroy(go);
             _objects.Clear();
+            foreach (var go in _craftRig) if (go != null) Object.Destroy(go);
+            _craftRig.Clear();
+            _craftBuilt = false; // rig re-builds under the fresh controlled object
             foreach (var go in _dust)
                 if (go != null) Object.Destroy(go);
             _dust.Clear();

@@ -1,6 +1,7 @@
 using UnityEngine;
 using KSPClone.Net;
 using KSPClone.SimCore;
+using KSPClone.Construction;
 
 namespace KSPClone.Client
 {
@@ -63,6 +64,9 @@ namespace KSPClone.Client
             _renderer?.Clear(); // re-pin the ground pad to the new craft
             Flight.Control(m.VesselId);
             Peer.OccupyStation(m.VesselId, Station.Pilot);
+            // Render the launched craft as its assembled parts (M3 modelling).
+            if (Vab?.Replica != null)
+                _renderer?.SetControlledCraft(m.VesselId, PartLayout.Compute(Vab.Replica.Tree, Vab.Catalog));
             Debug.Log($"[client] launched design {m.DesignId} → vessel {m.VesselId}; taking control");
         }
 
