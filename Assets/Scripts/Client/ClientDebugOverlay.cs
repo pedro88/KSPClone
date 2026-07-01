@@ -39,29 +39,42 @@ namespace KSPClone.Client
                 var bodies = _client.SeedBodies;
                 var parentId = peer.World.Vessels.TryGetValue(flight.ControlledVesselId.Value, out var cv)
                     ? cv.Orbit.ParentBody : CelestialBodyId.Planet;
-                var bodyCentre = bodies != null ? bodies.WorldPositionOf(parentId, peer.ServerGameTime) : new Vector3d(0, 0, 0);
-
-                var radial = pos - bodyCentre;
-                double dist = radial.Length;
-                var up = dist > 1e-6 ? radial * (1.0 / dist) : new Vector3d(0, 1, 0);
-                double altitude = dist - WorldSeed.EarthRadius;   // above Earth's surface
-                double speed = vel.Length;
-                double vertical = Vector3d.Dot(vel, up);
-                double horizontal = System.Math.Sqrt(System.Math.Max(0.0, speed * speed - vertical * vertical));
-                // Flight-path angle: +90° = straight up, 0° = horizontal.
-                double fpaDeg = speed > 1e-3
-                    ? System.Math.Asin(System.Math.Max(-1.0, System.Math.Min(1.0, vertical / speed))) * (180.0 / System.Math.PI)
-                    : 0.0;
 
                 GUILayout.BeginArea(new Rect(Screen.width - 260, Screen.height - 170, 250, 160), GUI.skin.box);
                 GUILayout.Label("== NAV ==");
-                GUILayout.Label(altitude < 10_000.0
-                    ? $"altitude  : {altitude:F0} m ASL"
-                    : $"altitude  : {altitude / 1000.0:F1} km ASL");
-                GUILayout.Label($"speed     : {speed:F1} m/s");
-                GUILayout.Label($"vertical  : {vertical:+0.0;-0.0;0.0} m/s");
-                GUILayout.Label($"horizontal: {horizontal:F1} m/s");
-                GUILayout.Label($"path angle: {fpaDeg:+0.0;-0.0;0.0}°");
+                if (bodies == null)
+                {
+                    // No body registry → we can only give origin-relative range,
+                    // which is NOT altitude. Say so rather than mislead.
+                    GUILayout.Label("altitude  : n/a (no bodies)");
+                    GUILayout.Label($"range(sun): {pos.Length / 1000.0:F0} km");
+                    GUILayout.Label($"speed     : {vel.Length:F1} m/s");
+                }
+                else
+                {
+                    var bodyCentre = bodies.WorldPositionOf(parentId, peer.ServerGameTime);
+                    double bodyRadius = SurfaceRadiusOf(parentId);
+                    var radial = pos - bodyCentre;
+                    double dist = radial.Length;
+                    var up = dist > 1e-6 ? radial * (1.0 / dist) : new Vector3d(0, 1, 0);
+                    double altitude = dist - bodyRadius;   // above the parent body's surface
+                    double speed = vel.Length;
+                    double vertical = Vector3d.Dot(vel, up);
+                    double horizontal = System.Math.Sqrt(System.Math.Max(0.0, speed * speed - vertical * vertical));
+                    // Flight-path angle: +90° = straight up, 0° = horizontal.
+                    double fpaDeg = speed > 1e-3
+                        ? System.Math.Asin(System.Math.Max(-1.0, System.Math.Min(1.0, vertical / speed))) * (180.0 / System.Math.PI)
+                        : 0.0;
+
+                    GUILayout.Label($"body      : {parentId}");
+                    GUILayout.Label(System.Math.Abs(altitude) < 10_000.0
+                        ? $"altitude  : {altitude:F0} m ASL"
+                        : $"altitude  : {altitude / 1000.0:F1} km ASL");
+                    GUILayout.Label($"speed     : {speed:F1} m/s");
+                    GUILayout.Label($"vertical  : {vertical:+0.0;-0.0;0.0} m/s");
+                    GUILayout.Label($"horizontal: {horizontal:F1} m/s");
+                    GUILayout.Label($"path angle: {fpaDeg:+0.0;-0.0;0.0}°");
+                }
                 GUILayout.EndArea();
             }
 
@@ -106,5 +119,14 @@ namespace KSPClone.Client
             GUILayout.Label("dark plane    = launch pad (hold Shift to lift off!)");
             GUILayout.EndArea();
         }
+
+        // Surface radius of a parent body (metres), for altitude-above-surface.
+        private static double SurfaceRadiusOf(CelestialBodyId id) => id switch
+        {
+            CelestialBodyId.Sun    => WorldSeed.SunRadius,
+            CelestialBodyId.Planet => WorldSeed.EarthRadius,
+            CelestialBodyId.Moon   => 1.737e6,
+            _ => 0.0,
+        };
     }
 }
