@@ -123,7 +123,7 @@ namespace KSPClone.Client
             GUILayout.Label("cyan capsule  = your vessel");
             GUILayout.Label("grey cubes    = world reference (speed)");
             GUILayout.Label("orange plume  = thrust");
-            GUILayout.Label("dark plane    = launch pad (hold Shift to lift off!)");
+            GUILayout.Label("green grid    = ground (sinks away as you climb)");
             GUILayout.EndArea();
         }
 

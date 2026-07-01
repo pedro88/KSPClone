@@ -182,11 +182,41 @@ namespace KSPClone.Client
         private void EnsureGround()
         {
             if (_ground != null) return;
-            _ground = GameObject.CreatePrimitive(PrimitiveType.Plane); // 10×10 m, normal +Y
+            _ground = GameObject.CreatePrimitive(PrimitiveType.Plane); // 10 m base, normal +Y
             _ground.name = "LaunchPadGround";
             Object.Destroy(_ground.GetComponent<Collider>()); // presentation only (no contact)
-            _ground.transform.localScale = new Vector3(40f, 1f, 40f); // ~400 m square — reads as ground, not a tile
-            _ground.GetComponent<Renderer>().material.color = new Color(0.40f, 0.44f, 0.52f);
+            // ~2 km square: it's world-pinned and rendered relative to the craft,
+            // so it slides downward as you climb — a big grid makes that motion
+            // (and thus altitude) legible, and stays on-screen through the first
+            // couple of km of ascent before it recedes past the far clip.
+            _ground.transform.localScale = new Vector3(200f, 1f, 200f);
+            var mat = _ground.GetComponent<Renderer>().material;
+            mat.color = Color.white;                       // let the texture's colours show
+            mat.mainTexture = GroundGridTexture();
+            mat.mainTextureScale = new Vector2(40f, 40f);  // ~50 m grid cells across the 2 km plane
+        }
+
+        private Texture2D? _gridTex;
+
+        // Earthy ground tile with bright grid lines on two edges; tiled 40× it
+        // reads as a ~50 m survey grid. Gives the receding ground parallax so
+        // liftoff altitude is visible without any HUD.
+        private Texture2D GroundGridTexture()
+        {
+            if (_gridTex != null) return _gridTex;
+            const int s = 64;
+            var baseCol = new Color(0.16f, 0.34f, 0.24f);  // land green
+            var lineCol = new Color(0.55f, 0.75f, 0.60f);  // grid line
+            var t = new Texture2D(s, s) { wrapMode = TextureWrapMode.Repeat };
+            for (int y = 0; y < s; y++)
+                for (int x = 0; x < s; x++)
+                {
+                    bool line = x < 2 || y < 2; // two edges → continuous grid when tiled
+                    t.SetPixel(x, y, line ? lineCol : baseCol);
+                }
+            t.Apply();
+            _gridTex = t;
+            return t;
         }
 
         private void RenderThrust(ClientFlightModel flight, double throttle)
