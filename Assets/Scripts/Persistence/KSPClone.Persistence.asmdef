@@ -2,7 +2,8 @@
     "name": "KSPClone.Persistence",
     "rootNamespace": "KSPClone.Persistence",
     "references": [
-        "KSPClone.SimCore"
+        "KSPClone.SimCore",
+        "KSPClone.Construction"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

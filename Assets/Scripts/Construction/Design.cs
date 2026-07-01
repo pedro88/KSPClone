@@ -47,6 +47,13 @@ namespace KSPClone.Construction
             return new Design(id, name, new PartTree(root), nextNodeId: 2);
         }
 
+        /// <summary>
+        /// Rehydrate a Design from persisted state (M3-T05): an already-built tree
+        /// plus the saved node-id cursor and applied seq. No ops are replayed.
+        /// </summary>
+        public static Design Restore(DesignId id, string name, PartTree tree, long nextNodeId, long appliedSeq) =>
+            new(id, name, tree, nextNodeId) { AppliedSeq = appliedSeq };
+
         /// <summary>Next monotonic node id for this Design (server-assigned on accepted adds).</summary>
         public NodeId AllocateNodeId() => new(_nextNodeId++);
 
