@@ -18,7 +18,14 @@ namespace KSPClone.Client
 
         private void Awake() => _client = GetComponent<ClientBootstrap>();
 
+        // Launch-frame reference, captured once at first real position. The pad
+        // is world-static while Earth orbits the Sun at ~29.8 km/s, so measuring
+        // altitude against the *live* Earth centre makes it plummet even at rest.
+        // We freeze the launch vertical (up0) and pad altitude here and measure
+        // climb along that instead — stable for the demo (ADR-0018 approximation).
         private Vector3d? _spawn;
+        private Vector3d _up0 = new(0, 1, 0);
+        private double _spawnAltAsl;
 
         private void OnGUI()
         {
@@ -34,47 +41,47 @@ namespace KSPClone.Client
             {
                 var pos = flight.ControlledState.Position;
                 var vel = flight.ControlledState.Velocity;
-                _spawn ??= pos;
 
                 var bodies = _client.SeedBodies;
                 var parentId = peer.World.Vessels.TryGetValue(flight.ControlledVesselId.Value, out var cv)
                     ? cv.Orbit.ParentBody : CelestialBodyId.Planet;
 
+                // Freeze the launch vertical + pad altitude once (see field docs).
+                if (_spawn is null)
+                {
+                    _spawn = pos;
+                    if (bodies != null)
+                    {
+                        var ec0 = bodies.WorldPositionOf(parentId, peer.ServerGameTime);
+                        var r0 = pos - ec0;
+                        double d0 = r0.Length;
+                        _up0 = d0 > 1e-6 ? r0 * (1.0 / d0) : new Vector3d(0, 1, 0);
+                        _spawnAltAsl = d0 - SurfaceRadiusOf(parentId);
+                    }
+                }
+
+                // Climb along the frozen launch vertical — Earth's orbital motion
+                // doesn't leak in (unlike distance to the live body centre).
+                double climb = Vector3d.Dot(pos - _spawn.Value, _up0);
+                double altitude = _spawnAltAsl + climb;
+                double speed = vel.Length;
+                double vertical = Vector3d.Dot(vel, _up0);
+                double horizontal = System.Math.Sqrt(System.Math.Max(0.0, speed * speed - vertical * vertical));
+                // Flight-path angle: +90° = straight up, 0° = horizontal.
+                double fpaDeg = speed > 1e-3
+                    ? System.Math.Asin(System.Math.Max(-1.0, System.Math.Min(1.0, vertical / speed))) * (180.0 / System.Math.PI)
+                    : 0.0;
+
                 GUILayout.BeginArea(new Rect(Screen.width - 260, Screen.height - 170, 250, 160), GUI.skin.box);
                 GUILayout.Label("== NAV ==");
-                if (bodies == null)
-                {
-                    // No body registry → we can only give origin-relative range,
-                    // which is NOT altitude. Say so rather than mislead.
-                    GUILayout.Label("altitude  : n/a (no bodies)");
-                    GUILayout.Label($"range(sun): {pos.Length / 1000.0:F0} km");
-                    GUILayout.Label($"speed     : {vel.Length:F1} m/s");
-                }
-                else
-                {
-                    var bodyCentre = bodies.WorldPositionOf(parentId, peer.ServerGameTime);
-                    double bodyRadius = SurfaceRadiusOf(parentId);
-                    var radial = pos - bodyCentre;
-                    double dist = radial.Length;
-                    var up = dist > 1e-6 ? radial * (1.0 / dist) : new Vector3d(0, 1, 0);
-                    double altitude = dist - bodyRadius;   // above the parent body's surface
-                    double speed = vel.Length;
-                    double vertical = Vector3d.Dot(vel, up);
-                    double horizontal = System.Math.Sqrt(System.Math.Max(0.0, speed * speed - vertical * vertical));
-                    // Flight-path angle: +90° = straight up, 0° = horizontal.
-                    double fpaDeg = speed > 1e-3
-                        ? System.Math.Asin(System.Math.Max(-1.0, System.Math.Min(1.0, vertical / speed))) * (180.0 / System.Math.PI)
-                        : 0.0;
-
-                    GUILayout.Label($"body      : {parentId}");
-                    GUILayout.Label(System.Math.Abs(altitude) < 10_000.0
-                        ? $"altitude  : {altitude:F0} m ASL"
-                        : $"altitude  : {altitude / 1000.0:F1} km ASL");
-                    GUILayout.Label($"speed     : {speed:F1} m/s");
-                    GUILayout.Label($"vertical  : {vertical:+0.0;-0.0;0.0} m/s");
-                    GUILayout.Label($"horizontal: {horizontal:F1} m/s");
-                    GUILayout.Label($"path angle: {fpaDeg:+0.0;-0.0;0.0}°");
-                }
+                GUILayout.Label($"body      : {parentId}");
+                GUILayout.Label(System.Math.Abs(altitude) < 10_000.0
+                    ? $"altitude  : {altitude:F0} m ASL"
+                    : $"altitude  : {altitude / 1000.0:F1} km ASL");
+                GUILayout.Label($"speed     : {speed:F1} m/s");
+                GUILayout.Label($"vertical  : {vertical:+0.0;-0.0;0.0} m/s");
+                GUILayout.Label($"horizontal: {horizontal:F1} m/s");
+                GUILayout.Label($"path angle: {fpaDeg:+0.0;-0.0;0.0}°");
                 GUILayout.EndArea();
             }
 
