@@ -40,11 +40,16 @@ namespace KSPClone.Construction
         // Optional propellant this part holds (tanks and engines with built-in fuel).
         public double PropellantKg { get; }
 
+        // Minimal geometry (metres) for stacking layout + presentation.
+        public double HeightM { get; }
+        public double RadiusM { get; }
+
         public PartType(
             PartTypeId id, double dryMassKg,
             IReadOnlyList<AttachPoint>? attachPoints = null,
             string? displayName = null,
-            double engineThrustN = 0.0, double engineIspS = 0.0, double propellantKg = 0.0)
+            double engineThrustN = 0.0, double engineIspS = 0.0, double propellantKg = 0.0,
+            double heightM = 1.0, double radiusM = 0.6)
         {
             Id = id;
             DisplayName = displayName ?? id.Value;
@@ -53,6 +58,8 @@ namespace KSPClone.Construction
             EngineThrustN = engineThrustN;
             EngineIspS = engineIspS;
             PropellantKg = propellantKg;
+            HeightM = heightM;
+            RadiusM = radiusM;
         }
 
         public bool IsEngine => EngineThrustN > 0.0;
@@ -61,6 +68,14 @@ namespace KSPClone.Construction
         {
             foreach (var ap in AttachPoints)
                 if (string.Equals(ap.Key, key, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        public bool TryAttachPoint(string key, out AttachPoint point)
+        {
+            foreach (var ap in AttachPoints)
+                if (string.Equals(ap.Key, key, StringComparison.Ordinal)) { point = ap; return true; }
+            point = default;
             return false;
         }
     }

@@ -28,28 +28,38 @@ namespace KSPClone.Construction
 
         private static AttachPoint Ap(string key, double y) => new(key, new PartPose(0, y, 0, 0, 0, 0, 1));
 
-        /// <summary>The default stock catalog used by the demo VAB.</summary>
+        /// <summary>
+        /// The default stock catalog used by the demo VAB. Attach-point offsets are
+        /// ±half-height so parts stack flush (used by PartLayout + presentation).
+        /// </summary>
         public static PartCatalog Catalog() => new(new[]
         {
             new PartType(Mk1Pod, dryMassKg: 840, displayName: "Mk1 Command Pod",
-                attachPoints: new[] { Ap("bottom", -0.6), Ap("top", 0.6) }),
+                heightM: 1.1, radiusM: 0.625,
+                attachPoints: new[] { Ap("bottom", -0.55), Ap("top", 0.55) }),
 
             new PartType(FlT400, dryMassKg: 250, propellantKg: 2000, displayName: "FL-T400 Fuel Tank",
-                attachPoints: new[] { Ap("top", 1.0), Ap("bottom", -1.0) }),
+                heightM: 1.9, radiusM: 0.625,
+                attachPoints: new[] { Ap("top", 0.95), Ap("bottom", -0.95) }),
 
             new PartType(FlT800, dryMassKg: 500, propellantKg: 4000, displayName: "FL-T800 Fuel Tank",
-                attachPoints: new[] { Ap("top", 1.9), Ap("bottom", -1.9) }),
+                heightM: 3.75, radiusM: 0.625,
+                attachPoints: new[] { Ap("top", 1.875), Ap("bottom", -1.875) }),
 
             new PartType(Swivel, dryMassKg: 1500, engineThrustN: 215_000, engineIspS: 320,
-                displayName: "LV-T45 'Swivel' Engine", attachPoints: new[] { Ap("top", 0.8) }),
+                displayName: "LV-T45 'Swivel' Engine", heightM: 1.5, radiusM: 0.625,
+                attachPoints: new[] { Ap("top", 0.75) }),
 
             new PartType(Terrier, dryMassKg: 500, engineThrustN: 60_000, engineIspS: 345,
-                displayName: "LV-909 'Terrier' Engine", attachPoints: new[] { Ap("top", 0.5) }),
+                displayName: "LV-909 'Terrier' Engine", heightM: 0.8, radiusM: 0.55,
+                attachPoints: new[] { Ap("top", 0.4) }),
 
             new PartType(Decoupler, dryMassKg: 50, displayName: "TR-18A Stack Decoupler",
-                attachPoints: new[] { Ap("top", 0.2), Ap("bottom", -0.2) }),
+                heightM: 0.3, radiusM: 0.625,
+                attachPoints: new[] { Ap("top", 0.15), Ap("bottom", -0.15) }),
 
             new PartType(NoseCone, dryMassKg: 30, displayName: "Aerodynamic Nose Cone",
+                heightM: 1.0, radiusM: 0.625,
                 attachPoints: new[] { Ap("bottom", -0.5) }),
         });
     }
