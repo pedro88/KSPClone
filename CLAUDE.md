@@ -86,8 +86,15 @@ These are not suggestions. If a change violates one, stop and flag it.
 
 ## Open decisions (don't silently pick — they're tracked)
 
-See the table at the bottom of [specs/roadmap.md](specs/roadmap.md). Currently: **P-1** wire/delta format, **P-4** floating-origin rebasing (proposal exists), in-game comms modality, **COMMS-6** ground-control bonus mechanism, identity/join/auth. Resolve the one that gates your slice before starting it; a dev stub is fine for M0–M3.
+See the table at the bottom of [specs/roadmap.md](specs/roadmap.md). **P-1** (wire/delta) and **P-4** (floating-origin rebasing) are **resolved** — ADR-0012 + ADR-0013. Still open: in-game comms modality, **COMMS-6** ground-control bonus mechanism, identity/join/auth. Resolve the one that gates your slice before starting it; a dev stub is fine until M4.
 
 ## Build order right now
 
-`M0 — Skeleton` first: headless fixed-step server + master clock + one on-rails vessel + a client that sees it + warp vote + Postgres write-through. No features, no rendering polish. Prove the spine end-to-end, then layer. First ticket: **M0-T01** in [specs/tasks/M0.md](specs/tasks/M0.md).
+M0–M3 are **code-complete** (M0 spine, M1 physics bubble + prediction, M2 multi-crew, M2.5 presentation + surface launch, M3 collaborative VAB). See the live status list in [specs/roadmap.md](specs/roadmap.md) and the ADRs (through ADR-0020).
+
+Next work, in order:
+1. **Wire M3's transport** — ServerNetHost/ClientNetPeer dispatch of the Design channel (message tags 5–10): join → coordinator → broadcast; client → `DesignReplica`; plus DB write-through for `DesignStore`. The engine-agnostic mechanism is built + unit-tested; this is the runtime hookup + in-editor validation (same staging M1 used).
+2. **Runtime-validate the carried-forward code** — M1/M2/M3 have EditMode/PlayMode logic tested but several Unity-host paths (`BubbleIntegrator` in a live editor, PhysX ground contact from M2.5, the Design channel) were authored, not yet run this cycle. Confirm in-editor.
+3. **M4 — Comms & ground control** (resolve in-game comms modality + COMMS-6 first) or **M5 — Progression** (interleavable).
+
+Still start any new behaviour spec-first, one thin slice, one commit per ticket.

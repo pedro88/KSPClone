@@ -7,10 +7,13 @@ Fine-grained tickets expanded from [../roadmap.md](../roadmap.md). Each ticket i
 | M0 — Skeleton (the spine) | [M0.md](./M0.md) | 23 | M0-T01 … M0-T23 |
 | M1 — Physics bubble + prediction | [M1.md](./M1.md) | 19 | M1-T01 … M1-T19 |
 | M2 — Multi-crew stations | [M2.md](./M2.md) | 11 | M2-T01 … M2-T11 |
+| M2.5 — Presentation & surface | [M2.5-celestial-skybox.md](./M2.5-celestial-skybox.md) | 2 | M2.5-T01 … M2.5-T02 |
 | M3 — Collaborative VAB | [M3.md](./M3.md) | 8 | M3-T01 … M3-T08 |
 | M4 — Comms & ground control | [M4.md](./M4.md) | 12 | M4-T01 … M4-T12 |
 | M5 — Progression (Science mode) | [M5.md](./M5.md) | 8 | M5-T01 … M5-T08 |
-| **Total** | | **81** | |
+| **Total** | | **83** | |
+
+Status (code): M0–M3 + M2.5 code-complete; M4/M5 not started. Live detail in [../roadmap.md](../roadmap.md).
 
 ## Ticket format
 
@@ -28,7 +31,7 @@ Fine-grained tickets expanded from [../roadmap.md](../roadmap.md). Each ticket i
 
 ## Coverage
 
-All 48 spec requirements are cited by at least one ticket; no ticket cites a requirement that doesn't exist in `spec.md`. Verify with:
+All 49 spec requirements are cited by at least one ticket; no ticket cites a requirement that doesn't exist in `spec.md`. Verify with:
 
 ```sh
 python3 - <<'EOF'

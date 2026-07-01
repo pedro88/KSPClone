@@ -191,7 +191,19 @@ Instantiating a Design into a Vessel in the world. The boundary between the desi
 A single construction action (add/remove/move part) sent to the authoritative server, applied in arrival order, and broadcast to all editors. The server serializes all edits; no CRDT.
 
 **Subtree lock**:
-An advisory claim a player places on a subassembly ("I've got the upper stage") so others can't edit that subtree until released. Layered on top of the op-log to prevent conflicts.
+An advisory claim a player places on a subassembly ("I've got the upper stage") so others can't edit that subtree until released. Layered on top of the op-log to prevent conflicts. Overlapping claims across different holders are denied; a player's locks auto-release on disconnect.
+
+**Edit op-log**:
+The per-Design append-only record of accepted, sequenced edit ops (`EditOpLog`). The canonical part tree is the *fold* of the log in sequence order — the log is the ordered source of truth for replication and persistence.
+
+**Stable node id**:
+A part node's identifier within a Design (`NodeId`), monotonic and **server-assigned** on an accepted add. Never an index or object ref, and never reused — edit ops and subtree locks address nodes by it so they mean the same thing across concurrent edits.
+
+**Part catalog**:
+The read-only registry of part *types* (`PartCatalog`/`PartType`): attach points, mass, and (later) resource slots. Reference data only — which types a program may *use* is gated by the tech tree (M5), not the catalog.
+
+**Design registry / edit service**:
+The server-authoritative construction path (`DesignRegistry` + `DesignEditService`): holds live Designs + their op-logs, sequences every edit in arrival order, assigns node ids, and enforces subtree locks. Single authority, no CRDT (Art. 1). Reaches flight only through `LaunchInstantiator` (Art. 7).
 
 ## Crew & control
 

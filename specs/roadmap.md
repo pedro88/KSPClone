@@ -176,9 +176,9 @@ Open decisions remaining (gating specific slices) are tracked at the bottom of t
 
 | Item | Blocks | Owner decision |
 |---|---|---|
-| P-1 wire/delta format | Slice 1.2 | plan |
-| P-4 floating-origin rebasing | Slice 1.1 | plan |
+| ~~P-1 wire/delta format~~ | Slice 1.2 | **resolved — ADR-0013** |
+| ~~P-4 floating-origin rebasing~~ | Slice 1.1 | **resolved — ADR-0012** |
 | P-2 comms transport | Slice 4.2 | plan |
 | In-game comms modality | Slice 4.2 | spec |
 | COMMS-6 assignment + bonuses | Slice 4.3 | spec |
-| Identity / join / auth | public multi-client ship | plan (dev stub OK for M0–M3) |
+| Identity / join / auth | public multi-client ship | plan (dev stub OK until M4) |
