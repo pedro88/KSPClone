@@ -32,7 +32,9 @@ namespace KSPClone.Server
         // _demoStartAtRest. Off → the far-out at-rest sandbox above.
         [SerializeField] private bool _demoStartOnSurface = true;
         private bool _surfaceMode;
-        private SurfaceGroundBody _ground;
+        // Ground pads keyed by vessel — the seed craft AND any vessel launched
+        // from the VAB that promotes near the surface each get one (M3 launch).
+        private readonly System.Collections.Generic.Dictionary<VesselId, SurfaceGroundBody> _grounds = new();
 
         public ServerSimulation Sim { get; private set; }
 
@@ -85,7 +87,7 @@ namespace KSPClone.Server
         private void OnDestroy()
         {
             if (Sim?.Promotion != null) Sim.Promotion.VesselPromoted -= OnDemoPromoted;
-            if (_ground != null) Destroy(_ground.gameObject);
+            foreach (var g in _grounds.Values) if (g != null) Destroy(g.gameObject);
             _vesselBodies?.Dispose();
             _bubbleHost?.Dispose();
             _transport?.Dispose();
@@ -132,20 +134,33 @@ namespace KSPClone.Server
 
         private void OnDemoPromoted(PromotionEvent e)
         {
-            if (!e.VesselId.Equals(WorldSeed.SeedVesselId)) return;
-            if (_vesselBodies != null && _vesselBodies.TryGetBody(e.VesselId, out var body) && body != null)
+            // Any vessel promoted near a surface (the seed craft or one launched
+            // from the VAB) starts at rest on a ground pad. Off-surface promotions
+            // (e.g. the 50-Earth-radii at-rest sandbox) keep the old seed-only
+            // zeroing and get no pad.
+            bool nearSurface = _surfaceMode && IsNearSurface(e.WorldPosition);
+            bool zero = nearSurface || (!_surfaceMode && e.VesselId.Equals(WorldSeed.SeedVesselId));
+            if (zero && _vesselBodies != null && _vesselBodies.TryGetBody(e.VesselId, out var body) && body != null)
             {
                 body.Body.linearVelocity = Vector3.zero;
                 body.Body.angularVelocity = Vector3.zero;
             }
-            if (_surfaceMode) SpawnGroundUnder(e);
+            if (nearSurface) SpawnGroundUnder(e);
+        }
+
+        // Within ~2 km of Earth's surface, in the world frame.
+        private bool IsNearSurface(Vector3d worldPos)
+        {
+            if (Sim?.World?.Bodies is null) return false;
+            var earth = Sim.World.Bodies.WorldPositionOf(CelestialBodyId.Planet, Sim.World.Clock.GameTimeSeconds);
+            return (worldPos - earth).Length - WorldSeed.EarthRadius < 2000.0;
         }
 
         // Create the static ground pad in the promoted craft's bubble scene,
         // top face at the surface directly beneath it (ADR-0018 §1/§4).
         private void SpawnGroundUnder(PromotionEvent e)
         {
-            if (_ground != null) return; // one pad for the demo craft
+            if (_grounds.ContainsKey(e.VesselId)) return; // one pad per vessel
             if (_bubbleHost == null) return;
             if (!Sim.Bubbles.TryGet(e.BubbleId, out var bubble)) return;
             var scene = _bubbleHost.TryGetScene(e.BubbleId);
@@ -156,7 +171,7 @@ namespace KSPClone.Server
                 (float)(e.WorldPosition.X - origin.X),
                 (float)(e.WorldPosition.Y - origin.Y),
                 (float)(e.WorldPosition.Z - origin.Z));
-            _ground = SurfaceGroundFactory.Create(scene.Value, craftLocal);
+            _grounds[e.VesselId] = SurfaceGroundFactory.Create(scene.Value, craftLocal);
         }
 
         // Stand up the active-physics column: seed the demo craft's mass/engines,

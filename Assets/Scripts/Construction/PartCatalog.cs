@@ -83,5 +83,7 @@ namespace KSPClone.Construction
         public bool TryGet(PartTypeId id, out PartType type) => _types.TryGetValue(id, out type!);
         public bool Contains(PartTypeId id) => _types.ContainsKey(id);
         public int Count => _types.Count;
+        /// <summary>All part types (for catalogue UI).</summary>
+        public IEnumerable<PartType> All => _types.Values;
     }
 }

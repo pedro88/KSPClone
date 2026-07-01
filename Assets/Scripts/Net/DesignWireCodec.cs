@@ -69,6 +69,14 @@ namespace KSPClone.Net
         public LaunchDesignMessage(DesignId d) { DesignId = d; }
     }
 
+    /// <summary>server→launcher: the Design was launched as this new Vessel (take control of it).</summary>
+    public readonly struct DesignLaunchedMessage
+    {
+        public readonly DesignId DesignId;
+        public readonly KSPClone.SimCore.VesselId VesselId;
+        public DesignLaunchedMessage(DesignId d, KSPClone.SimCore.VesselId v) { DesignId = d; VesselId = v; }
+    }
+
     /// <summary>server→joining editor: full-tree resync baseline (nodes + current seq).</summary>
     public readonly struct DesignSnapshotMessage
     {
@@ -94,6 +102,24 @@ namespace KSPClone.Net
 
         public static byte[] EncodeLaunch(LaunchDesignMessage m) => TagAndId(MessageType.LaunchDesign, m.DesignId);
         public static DesignId DecodeLaunch(byte[] p) => ReadTaggedId(p);
+
+        public static byte[] EncodeLaunched(DesignLaunchedMessage m)
+        {
+            using var ms = new MemoryStream(); using var w = new BinaryWriter(ms);
+            w.Write((byte)MessageType.DesignLaunched);
+            WriteDesignId(w, m.DesignId);
+            w.Write(m.VesselId.Value.ToByteArray());
+            return ms.ToArray();
+        }
+
+        public static DesignLaunchedMessage DecodeLaunched(byte[] p)
+        {
+            using var ms = new MemoryStream(p); using var r = new BinaryReader(ms);
+            r.ReadByte();
+            var d = ReadDesignId(r);
+            var v = new KSPClone.SimCore.VesselId(new Guid(r.ReadBytes(16)));
+            return new DesignLaunchedMessage(d, v);
+        }
 
         public static byte[] EncodeClaimLock(LockRequestMessage m) => TagLockReq(MessageType.ClaimLock, m);
         public static byte[] EncodeReleaseLock(LockRequestMessage m) => TagLockReq(MessageType.ReleaseLock, m);

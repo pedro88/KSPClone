@@ -60,7 +60,7 @@ namespace KSPClone.Net
                     ReleaseLock(player, DesignWireCodec.DecodeLockRequest(data));
                     break;
                 case MessageType.LaunchDesign:
-                    LaunchDesign(DesignWireCodec.DecodeLaunch(data));
+                    LaunchDesign(player, DesignWireCodec.DecodeLaunch(data));
                     break;
             }
         }
@@ -89,7 +89,7 @@ namespace KSPClone.Net
                     DesignWireCodec.EncodeLockBroadcast(new LockBroadcastMessage(m.DesignId, m.NodeId, default, false)));
         }
 
-        private void LaunchDesign(DesignId designId)
+        private void LaunchDesign(Guid player, DesignId designId)
         {
             if (!_registry.TryGet(designId, out var design)) return;
 
@@ -101,9 +101,11 @@ namespace KSPClone.Net
                 seed.LongitudeOfAscendingNode, seed.ArgumentOfPeriapsis, seed.MeanAnomalyAtEpoch,
                 _sim.World.Clock.GameTimeSeconds, seed.ParentBody);
 
-            LaunchInstantiator.Launch(design, _catalog, orbit, _sim.World, _sim.Masses, _sim.Engines);
-            // The new vessel now flows to clients via the normal snapshot path;
-            // a player occupies its Pilot station to promote + fly it (M2.5 pad).
+            var result = LaunchInstantiator.Launch(design, _catalog, orbit, _sim.World, _sim.Masses, _sim.Engines);
+            // Tell the launcher which vessel to take control of; occupying its
+            // Pilot promotes it and it settles on the M2.5 pad.
+            _sendToPlayer(player, DesignWireCodec.EncodeLaunched(
+                new DesignLaunchedMessage(designId, result.Vessel.Id)));
         }
 
         // --- IEditOpSink ---

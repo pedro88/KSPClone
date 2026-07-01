@@ -1,5 +1,7 @@
+using System.Linq;
 using UnityEngine;
 using KSPClone.SimCore;
+using KSPClone.Construction;
 
 namespace KSPClone.Client
 {
@@ -23,6 +25,9 @@ namespace KSPClone.Client
         // altitude against the *live* Earth centre makes it plummet even at rest.
         // We freeze the launch vertical (up0) and pad altitude here and measure
         // climb along that instead — stable for the demo (ADR-0018 approximation).
+        private bool _vabOpen;
+        private NodeId _vabSelected = NodeId.None;
+        private Vector2 _vabScroll;
         private Vector3d? _spawn;
         private Vector3d _up0 = new(0, 1, 0);
         private double _spawnAltAsl;
@@ -125,7 +130,75 @@ namespace KSPClone.Client
             GUILayout.Label("orange plume  = thrust");
             GUILayout.Label("green grid    = ground (sinks away as you climb)");
             GUILayout.Label("Earth globe   = straight down — right-drag to look back");
+            GUILayout.Label("B : open/close the VAB (build + launch)");
             GUILayout.EndArea();
+
+            if (_vabOpen) DrawVab();
+        }
+
+        private void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.B)) _vabOpen = !_vabOpen;
+        }
+
+        // Collaborative VAB (M3): browse the shared Design, add/remove/move parts,
+        // claim a subtree lock, and launch it onto the M2.5 pad.
+        private void DrawVab()
+        {
+            var vab = _client != null ? _client.Vab : null;
+            GUILayout.BeginArea(new Rect(Screen.width / 2 - 230, 30, 460, Screen.height - 90), GUI.skin.box);
+            GUILayout.Label("== VAB — Demo Rocket (B to close) ==");
+            if (vab == null || !vab.Ready)
+            {
+                GUILayout.Label("joining shared Design…");
+                GUILayout.EndArea();
+                return;
+            }
+
+            var tree = vab.Replica!.Tree;
+            if (_vabSelected.IsNone || !tree.Contains(_vabSelected)) _vabSelected = tree.Root;
+
+            GUILayout.Label($"selected: {NodeLabel(vab, _vabSelected)}");
+            var free = vab.FreeAttachPoints(_vabSelected).FirstOrDefault();
+
+            GUILayout.Label(free != null ? $"add part (attach '{free}'):" : "selection has no free attach point");
+            foreach (var pt in vab.Catalog.All)
+            {
+                GUI.enabled = free != null;
+                if (GUILayout.Button($"+ {pt.DisplayName}")) vab.AddPart(pt.Id, _vabSelected, free);
+                GUI.enabled = true;
+            }
+
+            GUILayout.Space(4);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Remove")) vab.RemovePart(_vabSelected);
+            if (GUILayout.Button("Claim lock")) vab.ClaimLock(_vabSelected);
+            if (GUILayout.Button("Release lock")) vab.ReleaseLock(_vabSelected);
+            GUILayout.EndHorizontal();
+            if (GUILayout.Button(">> LAUNCH to pad <<")) vab.Launch();
+            GUILayout.Label($"last edit: {vab.LastAck}");
+
+            GUILayout.Space(4);
+            GUILayout.Label("Tree (click to select):");
+            _vabScroll = GUILayout.BeginScrollView(_vabScroll);
+            foreach (var id in tree.Subtree(tree.Root))
+            {
+                int depth = tree.Ancestors(id).Count();
+                string lockStr = vab.Locks.TryGetValue(id, out var h) ? $"   [LOCK {h.ToString().Substring(0, 4)}]" : "";
+                string mark = id.Equals(_vabSelected) ? "> " : "   ";
+                if (GUILayout.Button(mark + new string(' ', depth * 2) + NodeLabel(vab, id) + lockStr, GUILayout.ExpandWidth(true)))
+                    _vabSelected = id;
+            }
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+        }
+
+        private static string NodeLabel(ClientVabModel vab, NodeId id)
+        {
+            if (vab.Replica != null && vab.Replica.Tree.TryGet(id, out var n) &&
+                vab.Catalog.TryGet(n.PartType, out var type))
+                return $"{type.DisplayName} (#{id.Value})";
+            return $"#{id.Value}";
         }
 
         // Surface radius of a parent body (metres), for altitude-above-surface.

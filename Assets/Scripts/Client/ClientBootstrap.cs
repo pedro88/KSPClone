@@ -25,6 +25,7 @@ namespace KSPClone.Client
         // full-throttle net liftoff (~30 m/s² = 200 kN / 5 t − g); keeps
         // prediction close to the server so reconciliation barely corrects.
         public ClientFlightModel Flight { get; } = new(new TrivialPredictionStep(thrustAccel: 30.0));
+        public ClientVabModel Vab { get; private set; } // VAB (M3): shared Design editing + launch
 
         private LiteNetLibClientTransport _transport;
         private ClientNetPeer _peer;
@@ -49,12 +50,25 @@ namespace KSPClone.Client
             _renderer = new ClientWorldRenderer(Camera.main != null ? Camera.main.transform : null);
             _skybox = new CelestialSkyboxRenderer(Camera.main != null ? Camera.main.transform : null);
             _seedBodies = WorldSeed.CreateBodies();
+            Vab = new ClientVabModel(Peer);
+            Peer.DesignLaunchedReceived += OnDesignLaunched;
             _transport.Connect(_host, _port);
             Debug.Log($"[client] connecting to {_host}:{_port}");
         }
 
+        // The VAB launched our Design → take control of the new vessel and occupy
+        // its Pilot (promotes it; it settles on the M2.5 pad).
+        private void OnDesignLaunched(DesignLaunchedMessage m)
+        {
+            _renderer?.Clear(); // re-pin the ground pad to the new craft
+            Flight.Control(m.VesselId);
+            Peer.OccupyStation(m.VesselId, Station.Pilot);
+            Debug.Log($"[client] launched design {m.DesignId} → vessel {m.VesselId}; taking control");
+        }
+
         private void OnHandshake(WorldHandshakeMessage handshake)
         {
+            Vab?.Join(); // start editing the shared demo Design
             if (handshake.Vessels.Count == 0) return;
             // Slice convention: take control of the first vessel (ADR-0016).
             var target = handshake.Vessels[0].Id;

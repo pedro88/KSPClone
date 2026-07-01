@@ -31,6 +31,7 @@ namespace KSPClone.Net
         public event Action<EditOpBroadcastMessage>? EditOpBroadcastReceived;
         public event Action<EditOpAckMessage>? EditOpAckReceived;
         public event Action<LockBroadcastMessage>? LockBroadcastReceived;
+        public event Action<DesignLaunchedMessage>? DesignLaunchedReceived;
 
         public void JoinDesign(Construction.DesignId d) =>
             _transport.Send(DesignWireCodec.EncodeJoin(new JoinDesignMessage(d)));
@@ -119,6 +120,9 @@ namespace KSPClone.Net
                     break;
                 case MessageType.LockBroadcast:
                     LockBroadcastReceived?.Invoke(DesignWireCodec.DecodeLockBroadcast(data));
+                    break;
+                case MessageType.DesignLaunched:
+                    DesignLaunchedReceived?.Invoke(DesignWireCodec.DecodeLaunched(data));
                     break;
             }
         }

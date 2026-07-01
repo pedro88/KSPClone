@@ -225,5 +225,6 @@ namespace KSPClone.Net
         ReleaseLock = 12,
         LockBroadcast = 13,
         LaunchDesign = 14,
+        DesignLaunched = 15,
     }
 }
