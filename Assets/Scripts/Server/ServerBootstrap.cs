@@ -165,7 +165,13 @@ namespace KSPClone.Server
         private void WireActivePhysics()
         {
             Sim.Masses.Set(WorldSeed.SeedVesselId, WorldSeed.CreateMass());
-            Sim.Engines.Set(WorldSeed.SeedVesselId, WorldSeed.CreateEngines());
+            // Surface-launch demo aid: the spec seed craft has TWR ~1.2 and only
+            // ~2.7 km/s Δv, so it can barely lift off and can't escape Earth —
+            // frustrating for a hand-flying test. Give the sandbox an arcade
+            // engine (TWR ~4, ~15 km/s Δv) so liftoff is punchy and escape is
+            // reachable. Not a spec behaviour; realistic seed stays in WorldSeed.
+            Sim.Engines.Set(WorldSeed.SeedVesselId,
+                _demoStartOnSurface ? CreateDemoLaunchEngines() : WorldSeed.CreateEngines());
 
             _bubbleHost = new UnityBubbleHost(Sim.Bubbles);
             var floatingOrigin = new FloatingOriginManager();
@@ -174,6 +180,20 @@ namespace KSPClone.Server
             Sim.SetBubbleStepper(new BubbleIntegratorStepper(_integrator));
             _vesselBodies = new ServerVesselBodies(Sim, _bubbleHost);
         }
+
+        // Arcade launch engine for the surface demo (see WireActivePhysics).
+        // 200 kN on the 5 t craft → TWR ~4; Isp 1000 s + 4 t propellant →
+        // ~15 km/s Δv (Earth escape is 11.2 km/s). Thrust up the vessel +Y.
+        private static EngineModule[] CreateDemoLaunchEngines() => new[]
+        {
+            new EngineModule(
+                name: "demo-launch",
+                thrustNewtons: 200_000.0,
+                ispSeconds: 1_000.0,
+                mountLocal: new Vector3d(0.0, -2.0, 0.0),
+                thrustDirLocal: new Vector3d(0.0, 1.0, 0.0),
+                propellantKg: 4_000.0),
+        };
 
         private SimWorld RestoreOrSeed(BodyRegistry bodies)
         {

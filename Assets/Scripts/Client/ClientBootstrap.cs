@@ -19,7 +19,10 @@ namespace KSPClone.Client
         [SerializeField] private float _attitudeRateRadPerSec = 0.5f;
 
         public ClientNetPeer Peer { get; private set; }
-        public ClientFlightModel Flight { get; } = new();
+        // Predictor thrust accel roughly matches the demo launch engine's
+        // full-throttle net liftoff (~30 m/s² = 200 kN / 5 t − g); keeps
+        // prediction close to the server so reconciliation barely corrects.
+        public ClientFlightModel Flight { get; } = new(new TrivialPredictionStep(thrustAccel: 30.0));
 
         private LiteNetLibClientTransport _transport;
         private ClientNetPeer _peer;
