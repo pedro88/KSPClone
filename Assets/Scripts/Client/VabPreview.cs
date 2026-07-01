@@ -15,7 +15,6 @@ namespace KSPClone.Client
     /// </summary>
     public sealed class VabPreview
     {
-        private const int Layer = 31;          // dedicated raycast layer
         private const float Distance = 7f;     // metres in front of the camera
         private const float RotSpeedDeg = 25f; // idle auto-rotate
 
@@ -64,7 +63,9 @@ namespace KSPClone.Client
             // don't also raycast-place behind the UI.
             if (Input.mousePosition.x < Screen.width * 0.42f) return;
             var ray = cam.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out var hit, 100f, 1 << Layer)) return;
+            // Only the VAB preview objects have colliders in the default scene
+            // (flight visuals strip theirs), so an unmasked raycast hits preview only.
+            if (!Physics.Raycast(ray, out var hit, 100f)) return;
             var tag = hit.collider.GetComponent<VabPartTag>();
             if (tag == null) return;
             if (tag.IsMarker)
@@ -87,7 +88,6 @@ namespace KSPClone.Client
                 // Part body.
                 var body = GameObject.CreatePrimitive(PartVisuals.Shape(p.PartType));
                 body.name = $"VabPart_{p.PartType}";
-                body.layer = Layer;
                 var col = PartVisuals.Color(p.PartType);
                 if (vab.Selected.Equals(p.Node)) col = Color.Lerp(col, Color.yellow, 0.55f);
                 body.GetComponent<Renderer>().material.color = col;
@@ -105,7 +105,6 @@ namespace KSPClone.Client
                     if (!type.TryAttachPoint(key, out var ap)) continue;
                     var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                     marker.name = $"VabMarker_{p.Node}_{key}";
-                    marker.layer = Layer;
                     marker.GetComponent<Renderer>().material.color = new Color(0.3f, 1f, 0.45f);
                     marker.transform.SetParent(_anchor!.transform, false);
                     marker.transform.localPosition = new Vector3((float)(p.RadiusM + 0.4), (float)(p.CenterY + ap.LocalPose.Py), 0f);
