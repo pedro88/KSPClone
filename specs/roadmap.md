@@ -122,16 +122,20 @@ Open decisions remaining (gating specific slices) are tracked at the bottom of t
 **Goal:** multiple players build one Design concurrently; launch instantiates a Vessel.
 **Exit:** BUILD-1/2/3/4 live and verified.
 **Demo:** two players edit one rocket Design at once; one locks the upper stage; edits serialize cleanly; launch puts the craft on the pad as a Vessel.
+**Status:** code-complete on `feat/m3-collaborative-vab` (ADR-0020); tickets are detailed as **M3-T01…T08** in [tasks/M3.md](tasks/M3.md). Boxes checked = logic built + EditMode-tested; interactive VAB awaits the transport hookup (see note under Slice 3.3).
 
 ### Slice 3.1 — Design model + edit op-log
-- [ ] T35 — Part-tree Design model, distinct from Vessel → editing a Design never touches flight state (BUILD-1, Art.7)
-- [ ] T36 — Server-serialized edit op-log + broadcast → concurrent add/remove/move from two clients converge identically (BUILD-2)
+- [x] T35 (M3-T01/02/03) — Part-tree Design model + pure mutator + server op-log; editing a Design never touches flight state; concurrent add/remove/move converge identically via the op-log fold (BUILD-1/2, Art.7)
+- [x] T36 (M3-T04) — Server-serialized edit-op broadcast + ordered client replica → two editors converge (BUILD-2). *Wire codec built + unit-tested; ServerNetHost/ClientNetPeer dispatch pending.*
 
 ### Slice 3.2 — Subtree locks
-- [ ] T37 — Claim/release advisory subtree lock → locked subtree rejects others' ops, released subtree accepts (BUILD-3)
+- [x] T37 (M3-T06/07) — Claim/release advisory subtree lock + enforcement → locked subtree rejects others' ops, released subtree accepts, auto-release on disconnect (BUILD-3)
 
 ### Slice 3.3 — Launch
-- [ ] T38 — Launch instantiates Design → Vessel on pad → new Vessel appears in world with crew slots, Design unchanged (BUILD-4)
+- [x] T38 (M3-T08) — Launch instantiates Design → Vessel on pad → new Vessel appears in world with crew slots, Design unchanged (BUILD-4)
+- [x] Persistence (M3-T05) — `DesignStore` write-through + restore (BUILD-1/2). *DB wiring pending.*
+
+> **Runtime-pending (how to make the VAB interactively testable):** the engine-agnostic mechanism is done and unit-tested, but nothing yet dispatches the Design channel over the live transport or draws a VAB. To click-test: (1) wire ServerNetHost to route `JoinDesign`/`EditOpSubmit` (tags 5–10) into `DesignEditCoordinator` and broadcast; (2) wire ClientNetPeer to feed broadcasts into a `DesignReplica`; (3) a minimal VAB scene/UI (add/remove/move part, claim lock, launch button); (4) call `DesignStore.UpsertDesign` on each accepted op. Until then, the VAB is exercised by the EditMode suite in `Assets/Tests/EditMode/Construction/`.
 
 ---
 
